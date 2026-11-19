@@ -1,0 +1,18 @@
+{
+  "provider": "openai_compat",
+  "model": "gpt-4o-mini",
+  "api_key": "",
+  "base_url": "",
+  "searx_base_url": "",
+  "temperature": 0.2,
+  "max_tokens": null,
+  "top_p": null,
+  "use_proxy": false,
+  "proxy_url": "",
+  "system_prompt": "你是一个有帮助的AI助手，擅长简洁准确地回答问题。",
+  "custom_models": [],
+  "vision_provider": "openai_compat",
+  "vision_model": "qwen3-vl-flash",
+  "vision_api_key": "",
+  "vision_base_url": ""
+}

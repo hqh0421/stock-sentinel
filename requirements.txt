@@ -1,0 +1,17 @@
+# 直接依赖固定到 2026-11-15 本地 .venv (Python 3.11) 验证通过的版本。
+# 完整传递依赖见 requirements.lock；两个私有 SDK 由 wheels/ 目录单独安装。
+# mcp 已移除：MCP / A2A 原型 schema 与 config/mcp.json 清理后全库零引用。
+fastapi==0.135.3
+uvicorn==0.44.0
+pydantic==2.12.5
+langchain-core==1.2.26
+langchain-openai==1.1.12
+langchain-anthropic==1.4.0
+langchain-google-genai==4.2.1
+anyio==4.10.0
+duckduckgo-search==8.1.1
+httpx==0.28.1
+playwright==1.58.0
+baostock==0.8.9
+akshare==1.18.52
+pandas==3.0.2

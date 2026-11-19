@@ -1,0 +1,52 @@
+# 本地（Docker Desktop on Windows）运行配置
+#
+#   docker compose -f docker/docker-compose.local.yml up -d --build
+#   docker compose -f docker/docker-compose.local.yml logs -f
+#   docker compose -f docker/docker-compose.local.yml down
+#
+# 与服务器版 docker-compose.yml 的差异：
+#   1. 镜像在本地构建（image: monitor-stock:local），不再依赖服务器 commit 出来的镜像；
+#   2. 内存上限从 1000m 提到 4g —— 星耀数智 SDK 登录要常驻子进程，
+#      1G 下会被 OOM killer 杀掉，这正是服务器上拿不到现价的根因；
+#   3. 默认不走代理（USE_PROXY=0）。若本机需要代理才能出网，改成 1 并填宿主代理端口。
+name: monitor-stock-local
+
+services:
+  monitor-stock:
+    build:
+      context: ..
+      # 本地专用：pip + 清华源构建（astral.sh 在国内 403，原 Dockerfile 的 uv 装不上）
+      dockerfile: docker/Dockerfile.local
+    image: monitor-stock:local
+    container_name: monitor-stock-local
+    ports:
+      - "8888:8888"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ../config:/app/config
+      - ../logs:/app/logs
+      # 源码挂载：改完代码只需 docker restart，不必重建镜像（依赖变了才需要 rebuild）
+      - ../app:/app/app
+      - ../frontend:/app/frontend
+    # 登录口令/会话密钥从仓库根目录 .env 注入（与服务器同一套口令）
+    env_file:
+      - ../.env
+    environment:
+      - USE_PROXY=${USE_PROXY:-0}
+      - PYTHONUNBUFFERED=1
+      - TZ=Asia/Shanghai
+      # 本机若需代理出网，置 USE_PROXY=1 并按需改端口
+      - HTTP_PROXY=${HTTP_PROXY:-}
+      - HTTPS_PROXY=${HTTPS_PROXY:-}
+      - NO_PROXY=localhost,127.0.0.1,host.docker.internal
+      - SESSION_SECURE=0
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 4g
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
+    restart: unless-stopped
