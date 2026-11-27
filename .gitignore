@@ -1,0 +1,99 @@
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+logs/
+
+# 星耀数智(AmazingData) 登录凭证，含密码，勿入库
+config/amazingdata_auth.json
+
+# 登录鉴权状态（口令哈希/盐/会话密钥），含敏感信息，勿入库
+config/auth.json
+
+# 多用户数据库（用户/会话/自选/持仓/流水/设置），含个人信息，勿入库
+config/*.db
+config/*.db-wal
+config/*.db-shm
+# 改库前留的临时快照（同样含个人信息）
+config/*.db.bak*
+config/*.db.bak-*
+
+# 雪球登录凭证 / Cookie / User-Agent，含敏感信息，勿入库
+config/xueqiu_auth.json
+
+# 实例级明文配置：模型 API Key、钉钉 webhook 与加签密钥，勿入库。
+# 仓库里只保留 *.example.json 空模板；真实值用环境变量或本地未跟踪文件。
+config/models.json
+config/user_settings.json
+!config/*.example.json
+
+# 个人策略表达式与提醒规则（已迁入 app.db；旧文件残留时也不入库）
+config/strategies.json
+config/alert_rules.json
+
+# 配置文件的手工备份/临时写入残留：2026-11-26 历史清理时删过 models.json.bak、
+# user_settings.json.bak、company_profiles.json.<rand>.tmp，别让它们再进来
+config/*.bak
+config/*.tmp
+
+# 全市场代码->名称表（运行时缓存，可自动重建，体积大）
+config/stock_list_cache.json
+
+# 其它运行时缓存（估值/财报/行业周期/市场周期）：每次跑一次就变，
+# 入库会让工作区永远是脏的。可自动重建，不入库。
+config/*_cache.json
+
+# 规则文件的可写副本：界面上改四池比例时，decision_rules.update() 会先留
+# 一份 .bak 再原子写入（写坏的兜底），属于运行时产物，不入库。
+config/*.json.bak
+config/*.json.tmp
+
+# 第三方 Python 轮子（体积大，安装后不入库，恢复方式见 README）
+wheels/
+
+# IDE / 内部目录
+.idea/
+.workbuddy/
+
+# 部署用环境变量（含口令/密钥），勿入库
+.env
+.env.*
+!.env.example
+
+# 临时接口调试产物（非源码）
+AmazingData_list.json
+root_list.json
+tgw_list.json
+
+# 本地验收脚本生成的会话令牌，勿入库
+test_scripts/.token
+
+# 本地配置备份目录（换机/同步时产生）
+config.bak.*/
+
+# 数据库自动备份目录（运维产物，随 config 卷持久化，不入库）
+config/backups/
+
+# 便携包构建产物（scripts/build_portable.sh），可随时重建
+build/
+dist/
+
+# 同花顺投资账本 OAuth 令牌（access/refresh token，等同登录态），勿入库
+config/tzzb_token.json
+
+# 自选/持仓备份（含代码、股数、成本价等个人仓位信息）。
+# 唯一真源是 config/app.db，此文件只是备份，可由持仓页面重新导出。
+config/favorites.json
+
+# 个股时间止损豁免记录（含个人持仓理由与到期日，实例级状态），勿入库
+config/time_stop_overrides.json
+
+# 账本同步状态（已改用 meta 表；旧文件残留时也不入库）
+config/tzb_sync_state.json
+
+# 指数成分股缓存（带 updated 时间戳，运行时重建）
+config/index_constituents_*.json

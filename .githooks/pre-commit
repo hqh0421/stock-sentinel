@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# 提交前密钥闸门 —— 防止持仓 / 凭证再次流进 git 历史。
+#
+# 背景：2026-11-26 发现历史里长期存在 config/favorites.json（含代码/股数/成本）、
+# models.json（api_key）、alert_rules.json（钉钉 webhook）等，已用 git-filter-repo
+# 重写历史清除。但"删过一次"不代表"不会再犯"——漏一个 .bak、一次手滑 git add -A
+# 就又回去了。这个钩子把那次事故的检查规则固化下来。
+#
+# 启用（每份克隆只需一次）：
+#   git config core.hooksPath .githooks
+#
+# 临时绕过（确实需要提交示例密钥时）：
+#   git commit --no-verify
+#
+# 只检查本次暂存的改动（新增行），不做全库扫描，避免历史误报卡住日常提交。
+set -u
+
+added=$(git diff --cached --name-only --diff-filter=ACMR)
+[ -z "$added" ] && exit 0
+
+fail=0
+
+# ---------- 1) 敏感文件本身不许进库（按路径拦，示例文件放行）----------
+path_rules='(^|/)\.env$|(^|/)config/(favorites|models|alert_rules|user_settings|strategies|mcp|tzb_sync_state|sentiment_history)\.json$|(^|/)config/[^/]*\.(bak|tmp)$|(^|/)app\.db$|(^|/)\.token$|(^|/)tzzb_token\.json$|(^|/)(auth|xueqiu_auth|amazingdata_auth|models)\.json$|(^|/)favorites\.json$'
+allow_rules='\.example\.(json|py|sh)$'
+blocked=$(printf '%s\n' "$added" | grep -Ei "$path_rules" | grep -Eiv "$allow_rules" || true)
+if [ -n "$blocked" ]; then
+  echo "[密钥闸门] 以下文件不该进仓库（含持仓/凭证/运行态）：" >&2
+  printf '   %s\n' $blocked >&2
+  echo "   → 已 git add 的话先 'git rm --cached <文件>'，并确认 .gitignore 已覆盖。" >&2
+  fail=1
+fi
+
+# ---------- 2) 内容扫描：只看新增行 ----------
+# 真实密钥特征：字段名 + 长串字面量（排除变量引用与占位符）
+# ⚠️ 字符类里的连字符必须放末尾：写成 `_\-\.` 在 Git Bash 自带 grep 下整条正则失效（已踩）
+pat_secret='(["'"'"']?(api_?key|secret_?key|access_?key|client_?secret|refresh_?token|access_?token|app_?password|password|passwd)["'"'"']?[[:space:]]*[:=][[:space:]]*["'"'"'])[A-Za-z0-9_.-]{16,}'
+pat_dingtalk='oapi\.dingtalk\.com/robot/send\?access_token=[A-Za-z0-9]{10,}'
+pat_privkey='BEGIN (RSA|OPENSSH|EC|DSA) PRIVATE KEY'
+pat_webhook='https://hooks\.slack\.com/services/[A-Za-z0-9/]{10,}'
+# 持仓特征：同一段里既有 shares 又有 cost（配置/数据文件才有意义）
+pat_position='"shares"[[:space:]]*:[[:space:]]*[0-9]{3,}[^}]{0,200}"cost"[[:space:]]*:[[:space:]]*[0-9]+\.[0-9]+'
+
+for f in $added; do
+  [ -f "$f" ] || continue
+  # 跳过明显的二进制/大文件
+  case "$f" in *.png|*.jpg|*.jpeg|*.gif|*.ico|*.pdf|*.zip|*.whl|*.so|*.dll|*.exe|*.ttf|*.woff*) continue;; esac
+  hits=$(git diff --cached -U0 -- "$f" \
+    | grep -E '^\+' | grep -Ev '^\+\+\+' \
+    | grep -Ein "$pat_secret|$pat_dingtalk|$pat_privkey|$pat_webhook|$pat_position" || true)
+  if [ -n "$hits" ]; then
+    echo "[密钥闸门] $f 新增内容疑似包含凭证/持仓：" >&2
+    printf '%s\n' "$hits" | cut -c1-140 | sed 's/^/   /' >&2
+    fail=1
+  fi
+done
+
+if [ "$fail" -ne 0 ]; then
+  echo "" >&2
+  echo "[密钥闸门] 已阻止本次提交。确认是误报可加 --no-verify 跳过。" >&2
+  echo "[密钥闸门] 若确为真实凭证：请先撤销提交，再去平台重置该凭证（历史里出现过就等于已泄露）。" >&2
+  exit 1
+fi
+exit 0

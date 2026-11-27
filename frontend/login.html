@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>登录 · 股票监控台</title>
+  <link rel="stylesheet" href="/static/login.css" />
+</head>
+<body>
+  <div class="login-wrap">
+    <div class="login-card">
+      <div class="brand">
+        <div class="logo">📈</div>
+        <div>
+          <div class="title" id="cardTitle">股票监控台</div>
+          <div class="subtitle" id="cardSubtitle">Monitor Stock · 登录后进入</div>
+        </div>
+      </div>
+      <form id="loginForm" class="login-form" autocomplete="off">
+        <label class="field">
+          <span class="label">用户名</span>
+          <input id="username" type="text" placeholder="admin" autocomplete="username" autofocus />
+        </label>
+        <label class="field">
+          <span class="label">访问口令</span>
+          <input id="password" type="password" placeholder="请输入访问口令" autocomplete="current-password" />
+        </label>
+        <div id="error" class="error" hidden></div>
+        <button id="submitBtn" type="submit" class="btn">登 录</button>
+        <div class="hint" id="hint">首次部署默认用户名 admin；口令见服务端 APP_PASSWORD。</div>
+        <div class="switch-line" id="switchLine" hidden>
+          <a href="#" id="toggleMode">没有账号？注册一个</a>
+        </div>
+      </form>
+      <div class="foot">© 股票监控台 · 内部系统，请勿外传口令</div>
+    </div>
+  </div>
+  <script src="/static/login.js"></script>
+</body>
+</html>

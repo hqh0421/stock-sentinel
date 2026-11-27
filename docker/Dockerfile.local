@@ -1,0 +1,44 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# 构建期清空 Docker Desktop 注入的失效代理
+ENV HTTP_PROXY="" HTTPS_PROXY="" http_proxy="" https_proxy="" NO_PROXY="" no_proxy=""
+
+# 国内镜像源：astral.sh 在国内 403，原 Dockerfile 的 uv 安装脚本走不通，
+# 本地构建直接用 pip + 清华源，省掉 uv 这一层。
+ARG PIP_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple
+
+# 依赖层单独放在最前，改系统依赖/代码时不用重装几百 MB 的包
+COPY requirements.txt .
+RUN pip install --no-cache-dir -i ${PIP_INDEX} --timeout 120 --retries 5 -r requirements.txt
+
+# 星耀数智 SDK 依赖的 tgw 原生库要链 libgssapi_krb5 / libkrb5，slim 镜像默认没有。
+# 缺了会伪装成 ModuleNotFoundError: No module named 'libtgw_python311'
+# （真实原因是 .so 加载失败：libgssapi_krb5.so.2: cannot open shared object file）。
+# apt 同样换清华源，且必须用 HTTPS：本机 TUN 代理会劫持明文 HTTP，apt 拿到的
+# Release 签名文件内容损坏（NOSPLIT/NODATA），HTTPS 不受影响。实测有效 2026-11。
+# bookworm 及以前的源在 /etc/apt/sources.list，trixie 起新格式在 debian.sources。
+RUN sed -i 's|http://deb.debian.org|https://mirrors.tuna.tsinghua.edu.cn|g; s|http://security.debian.org|https://mirrors.tuna.tsinghua.edu.cn|g' \
+        /etc/apt/sources.list /etc/apt/sources.list.d/debian.sources 2>/dev/null || true \
+    && apt-get update && apt-get install -y --no-install-recommends \
+        libgssapi-krb5-2 \
+        libkrb5-3 \
+    && rm -rf /var/lib/apt/lists/*
+
+
+COPY app/ app/
+COPY frontend/ frontend/
+COPY config/ config/
+
+RUN mkdir -p logs
+
+EXPOSE 8888
+ENV USE_PROXY=0
+ENV PYTHONUNBUFFERED=1
+ENV HTTP_PROXY="" HTTPS_PROXY="" http_proxy="" https_proxy="" NO_PROXY="" no_proxy=""
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8888"]
+
+# 注：星耀数智(AmazingData) 私有 SDK 不随开源仓库分发（wheels/ 未入库）。
+# 行情链路会自动降级到 腾讯 -> 雪球 -> 东财 -> AkShare 兜底，无需本 SDK。
