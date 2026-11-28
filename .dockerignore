@@ -1,0 +1,17 @@
+.git
+.gitignore
+.venv
+.uv-cache
+.idea
+__pycache__
+*.pyc
+logs/
+test_scripts/
+config/auth.json
+*.md
+*.bat
+*.ps1
+.dockerignore
+.env
+.env.*
+!.env.example

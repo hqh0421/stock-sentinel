@@ -1,0 +1,5 @@
+# 钩子脚本必须保持 LF：CRLF 的 shebang 在 Linux/macOS 下会直接报错
+.githooks/* text eol=lf
+
+# 脚本类同样按 LF 存，避免在容器里执行时报 "bad interpreter"
+*.sh text eol=lf

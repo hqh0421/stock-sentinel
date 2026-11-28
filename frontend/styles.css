@@ -1,0 +1,242 @@
+/* ============================================================
+   股票监控台 · 前端样式
+   设计令牌（与 Tailwind config 保持一致，供少量自定义组件使用）
+   ============================================================ */
+:root{
+  --brand:#1677ff;
+  --brand-50:#eef5ff;
+  --brand-100:#dbeafe;
+  --brand-600:#0f67e6;
+  --ink:#0f172a;
+  --ink-muted:#5b6b82;
+  --ink-faint:#8a99ad;
+  --line:#e6edf5;
+  --up:#e23d4e;       /* 涨 = 红 */
+  --up-soft:#fdeef0;
+  --down:#16a34a;     /* 跌 = 绿 */
+  --down-soft:#eaf7ee;
+}
+*{ box-sizing:border-box; }
+body{ background:#f4f7fb; margin:0; }
+
+::-webkit-scrollbar{ width:10px; height:10px; }
+::-webkit-scrollbar-thumb{ background:#cdd8e6; border-radius:8px; }
+::-webkit-scrollbar-track{ background:transparent; }
+
+/* 侧边栏导航选中态 */
+.nav-item.active{ background:#eaf3ff; color:#0f67e6; box-shadow: inset 3px 0 0 #1677ff; }
+.nav-item.active svg{ stroke:#0f67e6; }
+
+/* ---------------- 侧栏自适应 ----------------
+ * 原来 #nav 既不是滚动容器也没有弹性，aside 又锁死 h-screen：
+ * 窗口一矮（1366×768 的笔记本很常见），「更多工具」展开后底部几条直接被裁掉，
+ * 只能靠浏览器缩放才能看全——这是布局问题，不该让用户去调缩放。
+ * 三层处理：① 导航区可独立滚动，永不裁切；② 视口越矮条目越紧凑，常见的
+ * 720~900 高度不需要滚动就能全展示；③ 页头页脚固定，只让中间滚动。 */
+#sidebar{ overflow:hidden; }
+#sidebar > div:first-child{ flex:0 0 auto; }        /* 页头：不被压扁 */
+#sidebar > .mt-auto{ flex:0 0 auto; }               /* 页脚：数据源信息始终可见 */
+#nav{
+  flex:1 1 auto;
+  min-height:0;                                     /* 关键：不加这行 flex 子项不会滚 */
+  overflow-y:auto;
+  overflow-x:hidden;
+  overscroll-behavior:contain;                      /* 滚到底不带动主区 */
+  scrollbar-width:thin;
+  scrollbar-color:#cbd5e1 transparent;
+}
+#nav::-webkit-scrollbar{ width:6px; }
+#nav::-webkit-scrollbar-thumb{ background:#cbd5e1; border-radius:3px; }
+#nav::-webkit-scrollbar-track{ background:transparent; }
+
+/* 档 1：≤900px 先收间距（多数 1080p 窗口带浏览器工具栏就是这个高度） */
+@media (max-height: 900px){
+  #sidebar > div:first-child{ padding-top:14px; padding-bottom:14px; }
+  #nav{ gap:2px; padding-top:10px; padding-bottom:10px; }
+  #nav .nav-item{ padding-top:7px; padding-bottom:7px; }
+  #navMoreToggle{ padding-top:6px; padding-bottom:6px; }
+}
+/* 档 2：≤780px 再压字号与图标 */
+@media (max-height: 780px){
+  #nav{ gap:1px; padding-top:8px; padding-bottom:8px; }
+  #nav .nav-item{ padding-top:5px; padding-bottom:5px; font-size:13.5px; }
+  #nav .nav-item svg{ width:16px; height:16px; }
+  #nav .nav-item span{ line-height:1.35; }
+  #sidebar > .mt-auto{ padding:10px 16px; }
+  #sidebar > .mt-auto .text-\[11px\]{ margin-top:0; }
+}
+/* 档 3：≤700px 只保留必要信息，优先保证「一屏看全」 */
+@media (max-height: 700px){
+  #sidebar > div:first-child{ padding-top:10px; padding-bottom:10px; }
+  #nav .nav-item{ padding-top:3.5px; padding-bottom:3.5px; font-size:13px; }
+  #nav .nav-item svg{ width:15px; height:15px; }
+  #nav{ padding-top:6px; padding-bottom:6px; }
+  #sidebar > .mt-auto{ padding:8px 16px; }
+}
+
+/* 视图切换 */
+.view{ display:none; }
+.view.active{ display:block; animation:fadein .25s ease-out; }
+
+/* 价格闪动（涨跌） */
+.price-flash-up{ animation:flashup 1s ease-out; }
+.price-flash-down{ animation:flashdown 1s ease-out; }
+
+/* 分段按钮选中 */
+.seg-btn.active{ background:#1677ff; color:#fff; }
+.seg-btn.active:hover{ background:#0f67e6; }
+
+.dot{ width:8px;height:8px;border-radius:999px; display:inline-block; }
+
+/* 抽屉 */
+.drawer{ transition:transform .28s ease; }
+
+/* 数据表（thin） */
+table.thin th,table.thin td{ padding:10px 12px; white-space:nowrap; }
+table.thin thead th{ font-weight:600; }
+table.thin tbody tr{ border-top:1px solid var(--line); }
+table.thin tbody tr:hover{ background:rgba(22,119,255,0.04); }
+
+/* 视图内区块间距兜底（即使 Tailwind CDN 未加载也不至于贴在一起） */
+.view.active > * + *{ margin-top:1.5rem; }
+#indexStrip{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem; }
+@media (min-width:1024px){ #indexStrip{ grid-template-columns:repeat(4,minmax(0,1fr)); } }
+#indexStrip > *{ min-width:0; }
+
+.kbox{ font-variant-numeric:tabular-nums; }
+.hint{ color:#8a99ad; }
+.muted{ color:#8a99ad; }
+.tag{ font-size:11px; padding:2px 8px; border-radius:999px; }
+.hidden{ display:none !important; }
+
+/* 侧边栏折叠 */
+/* ---------------- 侧栏收起态 ----------------
+ * 原来只藏了 .nav-item 里的 span，结果「AI AGENT」小标题和「更多工具（专业）」
+ * 按钮的文字没被藏，在 68px 宽度下被挤成竖排；更糟的是收起按钮自己也在这条
+ * 规则里被 display:none，收起后没有任何入口能展开回去。 */
+#sidebar.collapsed{ width:68px; }
+#sidebar.collapsed > div:first-child{
+  flex-direction:column;      /* 68px 放不下 logo + 按钮并排，改成上下堆叠 */
+  gap:8px;
+  padding:12px 0;
+}
+#sidebar.collapsed .nav-item span,
+#sidebar.collapsed #sidebarBrand,
+#sidebar.collapsed #navGroupAi,
+#sidebar.collapsed #navMoreToggle,
+#sidebar.collapsed > .mt-auto{ display:none; }
+#sidebar.collapsed .nav-item{ justify-content:center; padding-left:0; padding-right:0; }
+/* 收起时把「更多工具」里那几个也直接摊开：反正只剩图标，省一次点击 */
+#sidebar.collapsed #navMore{ display:flex !important; }
+/* 展开入口：收起态下这个 ‹ 会由 JS 换成 ›，始终可见 */
+#sidebar.collapsed #collapseBtn{
+  flex:0 0 auto;
+  width:30px;
+  height:30px;
+  margin:0;                      /* 覆盖 tailwind 的 ml-auto，否则在纵向布局里被顶到右边 */
+  color:#0f67e6;                 /* 用品牌色，别做成浅灰小按钮——用户会找不到 */
+  border-color:#d7e5fd;
+  background:#f2f7ff;
+  font-size:15px;
+  line-height:1;
+}
+#sidebar.collapsed #collapseBtn:hover{ background:#e4efff; border-color:#bcd6fb; }
+
+/* 颜色工具类（供 JS 直接套用，对应 Tailwind 自定义色） */
+.text-up{ color:var(--up) !important; }
+.text-down{ color:var(--down) !important; }
+.text-flat{ color:#64748b !important; }
+.bg-down\\/10{ background:rgba(22,163,74,0.10); }
+.bg-up\\/10{ background:rgba(226,61,78,0.10); }
+.bg-amber-100{ background:#fef3c7; }
+.text-amber-600{ color:#d97706; }
+.bg-brand-50{ background:var(--brand-50); }
+.text-brand-600{ color:var(--brand-600); }
+.border-l-down{ border-left:4px solid var(--down) !important; }
+.border-l-up{ border-left:4px solid var(--up) !important; }
+.border-l-brand-500{ border-left:4px solid var(--brand) !important; }
+
+/* ============================================================
+   传统组件（趋势策略弹窗、详情字段、卡片等）
+   ============================================================ */
+.card-item{ background:#fff; border:1px solid var(--line); border-radius:16px; padding:16px; box-shadow:0 8px 24px rgba(15,23,42,0.06); }
+.card-item .title{ font-weight:700; font-size:15px; }
+.card-item .muted{ font-size:12px; color:#8a99ad; }
+
+.fav-summary{ display:flex; flex-wrap:wrap; gap:8px; margin:12px 0; }
+.fav-chip{ background:var(--brand-50); border-radius:12px; padding:6px 10px; font-size:12px; display:flex; flex-direction:column; gap:2px; }
+.fav-chip span{ color:#8a99ad; }
+.fav-chip strong{ font-size:13px; }
+
+.favorite-top{ display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
+
+/* 按钮 */
+.btn{ display:inline-flex; align-items:center; justify-content:center; gap:6px; padding:8px 14px; border-radius:10px; border:1px solid var(--line); background:#fff; color:var(--ink); font-size:13px; cursor:pointer; transition:.15s; }
+.btn:hover{ background:var(--brand-50); }
+.btn.primary{ background:var(--brand); color:#fff; border-color:var(--brand); }
+.btn.primary:hover{ background:var(--brand-600); }
+.btn.danger{ color:var(--up); border-color:var(--up-soft); }
+.btn.danger:hover{ background:var(--up-soft); }
+.btn:disabled{ opacity:.6; cursor:not-allowed; }
+
+/* 弹窗 */
+.modal{ position:fixed; inset:0; z-index:55; display:flex; align-items:center; justify-content:center; padding:20px; }
+.modal.hidden{ display:none; }
+.modal-backdrop{ position:absolute; inset:0; background:rgba(15,23,42,0.45); }
+.modal-panel{ position:relative; background:#fff; border-radius:16px; width:min(760px,100%); max-height:86vh; overflow:auto; box-shadow:0 20px 60px rgba(15,23,42,0.25); }
+.modal-panel.detail-modal-panel{ width:min(560px,100%); }
+.modal-header{ display:flex; justify-content:space-between; align-items:flex-start; padding:18px 20px; border-bottom:1px solid var(--line); }
+.modal-header h2{ font-size:17px; font-weight:800; margin:0; }
+.modal-header p{ margin:4px 0 0; font-size:12px; color:#8a99ad; }
+.modal-footer{ display:flex; justify-content:flex-end; gap:10px; padding:14px 20px; border-top:1px solid var(--line); }
+.icon-btn{ width:32px; height:32px; border-radius:10px; border:1px solid var(--line); background:#fff; color:var(--ink-muted); cursor:pointer; font-size:18px; line-height:1; }
+.icon-btn:hover{ background:var(--brand-50); }
+
+/* 详情字段 */
+.details-body{ padding:18px 20px; }
+.section-title{ font-weight:700; font-size:14px; margin:14px 0 8px; }
+.kv-row{ display:flex; justify-content:space-between; padding:6px 0; border-top:1px dashed var(--line); font-size:13px; }
+.kv-label{ color:#8a99ad; }
+.kv-value{ font-weight:600; }
+
+/* 趋势策略配置卡片 / 表单 */
+.trend-strategy-card .strategy-purpose{ font-size:13px; color:var(--ink-muted); margin:8px 0; }
+.trend-summary{ display:flex; flex-wrap:wrap; gap:8px; margin:8px 0; }
+.strategy-explain{ font-size:12px; color:var(--ink-muted); display:flex; flex-direction:column; gap:4px; }
+
+.trend-strategy-form{ display:flex; flex-direction:column; gap:18px; }
+.config-intro{ font-size:13px; color:var(--ink-muted); }
+.config-section h3{ font-size:14px; font-weight:700; margin:0 0 10px; }
+.config-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; }
+.config-field{ display:flex; flex-direction:column; gap:4px; }
+.config-label{ font-size:12px; color:var(--ink-muted); }
+.config-control input, .config-control select, .edit-grid input, .edit-grid select{ width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:10px; font-size:13px; }
+.config-help{ font-size:11px; color:#8a99ad; }
+.config-check{ display:flex; align-items:flex-start; gap:8px; font-size:13px; }
+.config-check em{ display:block; font-size:11px; color:#8a99ad; font-style:normal; }
+.help-list{ margin:0; padding-left:18px; font-size:13px; color:var(--ink-muted); }
+
+.edit-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+.inline-actions{ margin:12px 0; }
+
+/* 信号拆解 */
+.signal-breakdown{ display:flex; flex-direction:column; gap:10px; }
+.signal-row{ border:1px solid var(--line); border-radius:12px; padding:10px 12px; }
+.signal-row-head{ display:flex; justify-content:space-between; font-size:13px; }
+.signal-row .muted{ font-size:12px; }
+
+/* 估值对比表 */
+.valuation-compare table{ width:100%; border-collapse:collapse; font-size:12px; margin-top:8px; }
+.valuation-compare th, .valuation-compare td{ border:1px solid var(--line); padding:6px 8px; text-align:left; }
+.valuation-compare th{ background:var(--brand-50); }
+
+/* 计算差价输入组 */
+.tx-grid{ display:grid; grid-template-columns:repeat(2,1fr); gap:10px; }
+.tx-grid input{ width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:10px; font-size:13px; }
+.tx-actions{ margin-top:10px; }
+.kv-sub{ font-size:12px; color:var(--ink-muted); margin-top:8px; white-space:pre-wrap; }
+
+/* Toast（兜底样式） */
+#toast .toast{ background:#fff; border:1px solid var(--line); border-radius:12px; box-shadow:0 8px 24px rgba(15,23,42,0.06); padding:10px 12px; border-left:4px solid var(--brand); animation:fadein .25s ease-out; }
+#toast .toast-title{ font-size:13px; font-weight:700; }
+#toast .toast-message{ font-size:12px; color:var(--ink-muted); margin-top:2px; }
