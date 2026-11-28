@@ -1,0 +1,15 @@
+{
+  "_comment": "历史遗留的 JSON 回退配置。多用户版真源是 SQLite 的 user_settings 表，请勿在此填写真实密钥；生产用环境变量或设置页写入数据库。",
+  "total_capital": 0,
+  "available_cash": 0,
+  "cash_updated_at": "",
+  "investment_style": "mid_long",
+  "monitor_enabled": true,
+  "monitor_interval_sec": 300,
+  "monitor_kline_frequency": "d",
+  "monitor_strategy": "",
+  "dingtalk_enabled": false,
+  "dingtalk_webhook_url": "",
+  "dingtalk_secret": "",
+  "prefer_source": "xueqiu"
+}

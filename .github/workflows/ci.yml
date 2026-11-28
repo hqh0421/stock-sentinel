@@ -1,0 +1,65 @@
+name: CI
+
+# 公开仓库是净化快照（docs/、test_scripts/ 被剔除，个人 config 不入库）。
+# 这里只跑不依赖真实行情 / 密钥的检查：编译、JS 语法、密钥自检、标准库单测。
+# 单测按模块逐个跑——discover 全量一次跑在本项目存在测试间状态泄漏（见 PRD §7），
+# 逐模块既避开该问题，也让失败定位到具体文件。
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Compile all Python sources
+        run: python -m compileall -q app tests scripts
+
+      - name: Check frontend JS syntax
+        run: |
+          set -e
+          for f in frontend/*.js; do
+            node --check "$f"
+            echo "ok $f"
+          done
+
+      - name: Secret leak self-check
+        run: python scripts/harden_secrets.py
+
+      - name: Unit tests (per module)
+        run: |
+          set -e
+          fail=0
+          for f in tests/test_*.py; do
+            mod="tests.$(basename "$f" .py)"
+            echo "=== $mod ==="
+            if ! python -m unittest "$mod"; then
+              fail=1
+            fi
+          done
+          exit $fail

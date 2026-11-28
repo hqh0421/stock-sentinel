@@ -1,0 +1,503 @@
+{
+  "version": 1,
+  "_comment": "决策规则单一事实源：费率、情绪阈值、仓位政策、卖出参数、风控与调度口径只在这里改。热点更新（按文件 mtime）。",
+  "fees": {
+    "commission_rate": 0.00025,
+    "commission_min": 5.0,
+    "stamp_rate": 0.0005,
+    "transfer_rate": 1e-05,
+    "slippage_pct": 0.001,
+    "lot_size": 100,
+    "trading_days_per_year": 252
+  },
+  "backtest": {
+    "default_capital": 100000.0,
+    "default_position_pct": 1.0,
+    "min_bars": 20,
+    "min_range_bars": 10
+  },
+  "expr": {
+    "max_len": 500,
+    "max_nodes": 120,
+    "max_lookback": 250,
+    "max_call_args": 3
+  },
+  "sentiment": {
+    "zt_full": 90.0,
+    "dt_full": 25.0,
+    "board_full": 6.0,
+    "lianban_full": 22.0,
+    "temperature_bands": {
+      "freezing_max": 0.22,
+      "repair_max": 0.42,
+      "advance_max": 0.68
+    },
+    "market_percentile": {
+      "low": 0.25,
+      "high": 0.85,
+      "position_delta": 0.1
+    },
+    "no_gamble": {
+      "lianban_min": 5,
+      "zt_count_min": 80,
+      "blast_rate_min": 0.35
+    }
+  },
+  "sentiment_position": {
+    "regime_table": {
+      "collapse": {
+        "regime": "panic_defend",
+        "regime_label": "崩塌·保命",
+        "pos_min": 0.0,
+        "pos_max": 0.2,
+        "cash_min": 0.8,
+        "cash_max": 1.0,
+        "action": "defend",
+        "action_text": "系统性崩塌期：撤出投机仓、只留价值底仓，现金为王，等恐慌出清",
+        "allow_new_buy": false,
+        "allow_chase": false,
+        "pace": "不建仓；任何反弹都当作减仓机会",
+        "gamble_note": "崩塌期绝不抄底纯题材——这是最容易亏钱的阶段"
+      },
+      "ebb": {
+        "regime": "risk_off",
+        "regime_label": "退潮·收缩",
+        "pos_min": 0.2,
+        "pos_max": 0.35,
+        "cash_min": 0.65,
+        "cash_max": 0.8,
+        "action": "trim_speculative",
+        "action_text": "退潮期：撤出接力与题材仓，保留价值底仓，留现金等情绪见底",
+        "allow_new_buy": false,
+        "allow_chase": false,
+        "pace": "只减不加；等阶段回到「修复」再谈建仓",
+        "gamble_note": "退潮期不逆势抄底题材股，情绪退潮时题材股三天能跌掉一个月涨幅"
+      },
+      "freezing": {
+        "regime": "cold_accumulate",
+        "regime_label": "冰点·攒子弹",
+        "pos_min": 0.3,
+        "pos_max": 0.45,
+        "cash_min": 0.55,
+        "cash_max": 0.7,
+        "action": "accumulate_cash",
+        "action_text": "情绪冰点：赚钱效应消失、没人愿意接力——这是留现金、为下一波建仓备弹的窗口",
+        "allow_new_buy": true,
+        "allow_chase": false,
+        "pace": "分 3~4 批小仓试探，每批不超过目标仓位的 1/4；只买基本面没问题的低位标的",
+        "gamble_note": "冰点期只买「跌出来的价值」，不买「故事」——没有基本面支撑的票不参与"
+      },
+      "repair": {
+        "regime": "recovery_build",
+        "regime_label": "修复·建仓期",
+        "pos_min": 0.45,
+        "pos_max": 0.65,
+        "cash_min": 0.35,
+        "cash_max": 0.55,
+        "action": "start_building",
+        "action_text": "情绪修复：赚钱效应初现，开始分批建仓——低位有货、且有资金愿意接力",
+        "allow_new_buy": true,
+        "allow_chase": false,
+        "pace": "分 2~3 批建仓，优先低位、有基本面支撑的标的；不满仓，留一半子弹",
+        "gamble_note": "修复期可以买，但只买「位置低 + 有价值」的，不买已经冲起来的"
+      },
+      "advance": {
+        "regime": "trend_hold",
+        "regime_label": "主升·持有",
+        "pos_min": 0.6,
+        "pos_max": 0.8,
+        "cash_min": 0.2,
+        "cash_max": 0.4,
+        "action": "hold",
+        "action_text": "主升期：接力正在进行，持有让利润奔跑，不主动减也不追高加仓",
+        "allow_new_buy": true,
+        "allow_chase": false,
+        "pace": "不加仓；只对回调到位的持仓补，不对新高股加",
+        "gamble_note": "主升期不追高、不接最后一棒，浮盈留给移动止盈"
+      },
+      "euphoria": {
+        "regime": "euphoria_trim",
+        "regime_label": "亢奋·兑现",
+        "pos_min": 0.4,
+        "pos_max": 0.6,
+        "cash_min": 0.4,
+        "cash_max": 0.6,
+        "action": "trim",
+        "action_text": "情绪亢奋：涨是别人接力给的，不是自己赚的——兑现浮盈、不加仓、不追高",
+        "allow_new_buy": false,
+        "allow_chase": false,
+        "pace": "不加仓；高位票分批减仓，把浮盈变成现金",
+        "gamble_note": "亢奋期绝不参与博傻：不接最后一棒、不买无基本面支撑的纯题材、不在高位追"
+      },
+      "unknown": {
+        "regime": "neutral",
+        "regime_label": "未知·按纪律常规",
+        "pos_min": 0.5,
+        "pos_max": 0.7,
+        "cash_min": 0.3,
+        "cash_max": 0.5,
+        "action": "hold",
+        "action_text": "情绪数据不可用：按原有纪律常规管理，不因缺数据而放松也不因缺数据而恐慌",
+        "allow_new_buy": true,
+        "allow_chase": false,
+        "pace": "维持现有仓位，不主动加码",
+        "gamble_note": "数据缺失不等于安全，照常执行止损与安全边际纪律"
+      }
+    },
+    "style_tilt": {
+      "long": {
+        "pos_delta": 0.05,
+        "label": "长线（偏多，容忍波动）"
+      },
+      "mid_long": {
+        "pos_delta": 0.03,
+        "label": "中长线"
+      },
+      "swing": {
+        "pos_delta": -0.03,
+        "label": "波段（偏机动，快进快出）"
+      }
+    },
+    "phase_label": {
+      "collapse": "崩塌",
+      "ebb": "退潮",
+      "freezing": "冰点",
+      "repair": "修复",
+      "advance": "主升",
+      "euphoria": "亢奋",
+      "unknown": "未知"
+    }
+  },
+  "sell_style": {
+    "long": {
+      "label": "长线",
+      "stop_loss_default": -15.0,
+      "atr_stop_k": 3.0,
+      "band": 0.18,
+      "ma_stop": "ma60",
+      "t_trade": true,
+      "atr_targets": [
+        2.5,
+        4.5,
+        7.0
+      ]
+    },
+    "mid_long": {
+      "label": "中长线",
+      "stop_loss_default": -8.0,
+      "atr_stop_k": 2.5,
+      "band": 0.15,
+      "ma_stop": "ma20",
+      "t_trade": true,
+      "atr_targets": [
+        1.8,
+        3.2,
+        5.0
+      ]
+    },
+    "swing": {
+      "label": "波段",
+      "stop_loss_default": -6.0,
+      "atr_stop_k": 1.8,
+      "band": 0.12,
+      "ma_stop": "ma20",
+      "t_trade": false,
+      "atr_targets": [
+        1.4,
+        2.4,
+        4.0
+      ]
+    }
+  },
+  "risk": {
+    "vol_target_annual": 0.2,
+    "max_portfolio_drawdown_pct": 15.0,
+    "max_single_weight_pct": 35.0,
+    "max_industry_weight_pct": 50.0,
+    "stop_loss_distance_pct": 3.0,
+    "relative_position_window": 250,
+    "ma_long": 200,
+    "vol_lookback": 20,
+    "min_bars_for_guard": 20
+  },
+  "scheduler": {
+    "tick_seconds": 30,
+    "default_interval_sec": 300,
+    "min_interval_sec": 60,
+    "max_interval_sec": 3600,
+    "daily_review_at": "15:08",
+    "risk_check_at": "09:05",
+    "agent_enabled": true,
+    "review_before_notify": true,
+    "review_cooldown_sec": 1800,
+    "source_alert_enabled": true,
+    "source_failure_streak": 3,
+    "push_scheduled": true,
+    "backup_keep_days": 14,
+    "audit_keep_days": 90
+  },
+  "monitor": {
+    "relative_position_window": 60,
+    "vol_target_enabled": false,
+    "portfolio_drawdown_guard_enabled": false,
+    "pool_drift_alert_enabled": false,
+    "pool_drift_cooldown_sec": 14400
+  },
+  "time_stop": {
+    "enabled": true,
+    "base_days": 20,
+    "new_high_lookback_bars": 10,
+    "new_high_tolerance_pct": 0.5,
+    "min_bars_since_entry": 10,
+    "phase_scale": {
+      "collapse": 0.5,
+      "ebb": 0.75,
+      "freezing": 1.0,
+      "repair": 1.5,
+      "advance": 0.75,
+      "euphoria": 0.5,
+      "unknown": 1.0
+    },
+    "hype_dormant_scale": 1.6,
+    "hype_hot_scale": 0.6,
+    "hype_hot_days": 60,
+    "hype_hot_score": 0.5,
+    "hype_dormant_score": 0.2,
+    "note": "亏损单时间止损：浮亏 + 持有超过（base_days × 情绪阶段缩放 × 炒作度缩放）+ 近期未创新高 → 建议减半。三处反直觉设计：① 主升期收紧(0.75)——环境最好还浮亏说明选错；② 修复期放宽(1.5)——均值回归需要时间；③ 炒作度修正——近一年没炒作过的票(沉寂)给 1.6 倍时间等回归，刚炒过的票给 0.6 倍快走(退潮后易长期阴跌)。规则写死可审计，agent 只能在有据时豁免且必须留痕。"
+  },
+  "sentiment": {
+    "low_position_exception_pct": 0.25,
+    "note": "低位例外：大盘 250 日分位 ≤ 该值时，解除「情绪退潮/崩塌/亢奋期禁买」。理由——情绪指标只测题材投机温度，不含指数方向，会与「相对低位买、越跌越兴奋」理念冲突。例外只放开新开仓，不放开追高（allow_chase 恒 false）。"
+  },
+  "funds": {
+    "data_only": true,
+    "note": "场内基金/ETF/LOF 只提供行情数据（K线、报价、名称），不进策略与价值体系：不做时间止损、不出买卖信号、不做估值判断、不给三档目标价。理由——基金没有自己的 PE/PB、没有财报、没有「公司质量」，个股那套框架对它是错的尺子（曾据此输出「戴维斯双击条件具备」「安全边际充足」这类无意义结论）。持仓仍照常记账与估值市值，只是不给策略结论。"
+  },
+  "pools": {
+    "dividend": {
+      "label": "股息",
+      "role": "底仓压舱石：吃分红 + 缓慢估值修复，平滑账户回撤",
+      "target_pct": 20.0,
+      "min_pct": 18.0,
+      "max_pct": 22.0,
+      "max_single_pct": 10.0,
+      "max_positions": 2,
+      "time_rules": null,
+      "review_dd_pct": -25.0,
+      "stop_loss_pct": null,
+      "take_profit": [
+        {
+          "trigger": "dividend_yield_below_buy_ratio",
+          "value": 0.6,
+          "sell_pct": 100,
+          "note": "股息率跌破买入时 60%，或低于 10Y 国债 +1.5pp"
+        }
+      ],
+      "add_rules": {
+        "mode": "batch_on_dip",
+        "max_adds": 0,
+        "cash_small_add": true,
+        "extreme_dd_pct": -20.0
+      },
+      "prohibited": [
+        "不做短线波段",
+        "不用现金给长赛道/低估兜底"
+      ],
+      "sell_params": {
+        "label": "股息",
+        "stop_loss_default": -25.0,
+        "atr_stop_k": 3.0,
+        "band": 0.18,
+        "ma_stop": "ma60",
+        "t_trade": false,
+        "atr_targets": [
+          2.5,
+          4.5,
+          7.0
+        ]
+      }
+    },
+    "catalyst": {
+      "label": "催化波段成长",
+      "role": "事件驱动轮动仓：赚预期兑现，体系周转核心",
+      "target_pct": 18.0,
+      "min_pct": 15.0,
+      "max_pct": 21.0,
+      "max_single_pct": 9.0,
+      "max_positions": 2,
+      "time_rules": {
+        "review_weeks": 4,
+        "hard_stop_weeks": 8,
+        "review_action": "halve_if_no_start",
+        "hard_stop_action": "clear"
+      },
+      "stop_loss_pct": -18.0,
+      "review_dd_pct": null,
+      "take_profit": [
+        {
+          "trigger_pct": 18.0,
+          "sell_pct": 50,
+          "note": "T1：先落袋一半"
+        },
+        {
+          "trigger_pct": 32.0,
+          "sell_pct": 100,
+          "note": "T2：清掉剩余"
+        }
+      ],
+      "tail_drawdown_pct": 10.0,
+      "add_rules": {
+        "mode": "planned_two_tranches",
+        "max_adds": 1,
+        "add_levels_pct": [
+          -8.0
+        ],
+        "note": "底仓 + 固定跌幅加仓，合计不超过单票上限"
+      },
+      "prohibited": [
+        "满 8 周后继续持有",
+        "兑现资金跨池调拨"
+      ],
+      "sell_params": {
+        "label": "催化波段",
+        "stop_loss_default": -18.0,
+        "atr_stop_k": 1.8,
+        "band": 0.12,
+        "ma_stop": "ma20",
+        "t_trade": false,
+        "atr_targets": [
+          1.4,
+          2.4,
+          4.0
+        ]
+      }
+    },
+    "long_track": {
+      "label": "长赛道产业成长",
+      "role": "产业渗透率提升、长周期业绩兑现，无单一短期催化",
+      "target_pct": 15.0,
+      "min_pct": 12.0,
+      "max_pct": 18.0,
+      "max_single_pct": 7.5,
+      "max_positions": 2,
+      "time_rules": null,
+      "review_dd_pct": -30.0,
+      "stop_loss_pct": null,
+      "take_profit": [
+        {
+          "trigger_pct": 50.0,
+          "sell_pct": 66.7,
+          "recover_principal": true,
+          "note": "基准目标：卖 2/3 收回本金（+50% 时 2/3 恰好回本）"
+        },
+        {
+          "trigger": "reach_v3",
+          "sell_pct": 100,
+          "note": "剩余利润仓：基本面超预期则上调区间，否则 V3 收尾"
+        }
+      ],
+      "tail_drawdown_pct": 12.0,
+      "add_rules": {
+        "mode": "gradient_on_validated_pullback",
+        "max_adds": 2,
+        "require": "财报/订单验证",
+        "note": "只在验证成长逻辑的回调加仓，情绪杀跌不加"
+      },
+      "prohibited": [
+        "单纯情绪杀跌加仓",
+        "用现金缓冲兜底加仓"
+      ],
+      "sell_params": {
+        "label": "长赛道",
+        "stop_loss_default": -30.0,
+        "atr_stop_k": 2.5,
+        "band": 0.15,
+        "ma_stop": "ma20",
+        "t_trade": false,
+        "atr_targets": [
+          1.8,
+          3.2,
+          5.0
+        ]
+      }
+    },
+    "value": {
+      "label": "低估价值",
+      "role": "估值修复，高赔率，接受长期等待，不计时间成本",
+      "target_pct": 22.0,
+      "min_pct": 19.0,
+      "max_pct": 25.0,
+      "max_single_pct": 11.0,
+      "max_positions": 2,
+      "time_rules": null,
+      "review_dd_pct": -25.0,
+      "stop_loss_pct": null,
+      "take_profit": [
+        {
+          "trigger_pct": 50.0,
+          "sell_pct": 66.7,
+          "recover_principal": true,
+          "note": "V1：卖 2/3 收回本金"
+        },
+        {
+          "trigger": "reach_v3",
+          "sell_pct": 100,
+          "note": "剩余 1/3 到 V3 且无超预期则收尾"
+        }
+      ],
+      "tail_drawdown_pct": 12.0,
+      "add_rules": {
+        "mode": "one_shot",
+        "max_adds": 0,
+        "note": "一次性建仓，禁止加仓，防价值陷阱"
+      },
+      "prohibited": [
+        "任何加仓",
+        "用现金缓冲兜底加仓"
+      ],
+      "sell_params": {
+        "label": "低估价值",
+        "stop_loss_default": -25.0,
+        "atr_stop_k": 3.0,
+        "band": 0.18,
+        "ma_stop": "ma60",
+        "t_trade": false,
+        "atr_targets": [
+          2.5,
+          4.5,
+          7.0
+        ]
+      }
+    }
+  },
+  "cash": {
+    "target_pct": 25.0,
+    "min_pct": 10.0,
+    "max_pct": 30.0,
+    "priority": [
+      "catalyst_planned_add",
+      "dividend_extreme_small_add"
+    ],
+    "prohibited": [
+      "long_track_backstop",
+      "value_backstop"
+    ],
+    "note": "现金不足时先用池内兑现资金；无合适标的不强开仓"
+  },
+  "global_risk": {
+    "dd_stop_new_pct": -15.0,
+    "dd_halve_growth_value_pct": -20.0,
+    "dd_defensive_pct": -25.0,
+    "max_industry_pct": 30.0,
+    "gap_stop_at_open": true,
+    "pool_dd_review_pct": -15.0,
+    "rebalance_band_pp": 3.0,
+    "rebalance_cadence": "monthly",
+    "note": "账户自新高回撤分级：-15 停新开/加仓，-20 成长与低估各减半，-25 才只留股息+现金"
+  },
+  "pool_classify": {
+    "deadline_sec": 12.0,
+    "max_workers": 8,
+    "note": "分类建议的抓数预算：估值/财报走外部接口，必须硬截止，否则雪球 Cookie 失效时会挂成分钟级"
+  }
+}

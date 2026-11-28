@@ -1,0 +1,1171 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>股票监控台</title>
+<!-- 内联 SVG 图标：省掉浏览器对 /favicon.ico 的额外请求（会 404，控制台报错） -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231677ff'/%3E%3Cpath d='M8 21l5-6 4 3 7-9' stroke='white' stroke-width='2.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
+<!-- Tailwind 运行时本地化：原来引 cdn.tailwindcss.com，国内实测要 2.2s 且经常
+     拿不到内容（返回 0 字节），而它是同步脚本，会直接卡住整页渲染。
+     改为由本站 /static 提供，首次加载后走浏览器缓存。 -->
+<script src="/static/tailwind.js"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          brand: { 50:'#eef5ff',100:'#dbeafe',500:'#1677ff',600:'#0f67e6',700:'#0b59c9' },
+          ink:   { DEFAULT:'#0f172a', muted:'#5b6b82', faint:'#8a99ad' },
+          line:  '#e6edf5',
+          up:    { DEFAULT:'#e23d4e', soft:'#fdeef0' },   /* 涨 = 红 (A股习惯) */
+          down:  { DEFAULT:'#16a34a', soft:'#eaf7ee' },   /* 跌 = 绿 */
+          ai:    { 50:'#f3f1ff',100:'#e6e1ff',200:'#d3cbff',500:'#6d5efc',600:'#5a4be0',700:'#4739c4' },
+          warn:  { soft:'#fff8e6', DEFAULT:'#d98b00' },
+        },
+        fontFamily: { sans:['"Segoe UI"','"PingFang SC"','"Microsoft YaHei"','sans-serif'] },
+        borderRadius: { xl:'16px', '2xl':'20px' },
+        boxShadow: { card:'0 8px 24px rgba(15,23,42,0.06)' },
+        keyframes: {
+          fadein:{'0%':{opacity:0},'100%':{opacity:1}},
+          slidein:{'0%':{transform:'translateX(24px)',opacity:0},'100%':{transform:'translateX(0)',opacity:1}},
+          flashup:{'0%':{background:'#fdeef0'},'100%':{background:'transparent'}},
+          flashdown:{'0%':{background:'#eaf7ee'},'100%':{background:'transparent'}},
+        },
+        animation:{
+          fadein:'fadein .25s ease-out',
+          slidein:'slidein .25s ease-out',
+          flashup:'flashup 1s ease-out',
+          flashdown:'flashdown 1s ease-out',
+        }
+      }
+    }
+  }
+</script>
+<link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body class="font-sans text-ink">
+
+<div class="flex min-h-screen">
+  <!-- ============ 侧边栏 ============ -->
+  <aside id="sidebar" class="w-[244px] shrink-0 bg-white border-r border-line sticky top-0 h-screen flex flex-col">
+    <div class="px-5 py-5 flex items-center gap-3 border-b border-line">
+      <div class="w-9 h-9 rounded-xl bg-brand-500 text-white grid place-items-center font-bold">股</div>
+      <div id="sidebarBrand">
+        <div class="font-extrabold text-[17px] leading-tight">股票监控台</div>
+        <div class="text-[11px] text-ink-faint">星耀数智 · 实时行情</div>
+      </div>
+      <button id="collapseBtn" class="ml-auto w-7 h-7 rounded-lg border border-line text-ink-muted hover:bg-brand-50" title="收起侧栏">‹</button>
+    </div>
+    <nav class="p-3 flex flex-col gap-1 text-[14px]" id="nav">
+      <button class="nav-item active flex items-center gap-3 px-3 py-2.5 rounded-xl text-ink-muted hover:bg-brand-50" data-view="overview">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+        <span>总览看板</span>
+      </button>
+      <button class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-ink-muted hover:bg-brand-50" data-view="watchlist">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17l5-5 4 4 8-9"/><path d="M14 7h6v6"/></svg>
+        <span>自选股</span>
+      </button>
+      <button class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-ink-muted hover:bg-brand-50" data-view="pools">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+        <span>四池配置</span>
+      </button>
+      <button class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-ink-muted hover:bg-brand-50" data-view="calculator">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 6h8M8 10h2M12 10h2M16 10h0M8 14h2M12 14h2M16 14h0M8 18h8"/></svg>
+        <span>差价计算器</span>
+      </button>
+      <button class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-ink-muted hover:bg-brand-50" data-view="backtest">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M6 15l4-5 3 3 5-7"/></svg>
+        <span>回测</span>
+      </button>
+      <button class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-ink-muted hover:bg-brand-50" data-view="factors">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h11"/><path d="M4 12h16"/><path d="M4 17h9"/><circle cx="18.5" cy="9" r="2.2"/><circle cx="15.5" cy="15.5" r="2.2"/></svg>
+        <span>策略因子库</span>
+      </button>
+      <button class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-ink-muted hover:bg-brand-50" data-view="performance">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17l5-6 4 3 6-8"/><path d="M3 21h18"/></svg>
+        <span>绩效复盘</span>
+      </button>
+      <div id="navGroupAi" class="px-3 pt-3 pb-0.5 text-[10.5px] font-extrabold text-ai-500 tracking-wider flex items-center gap-1.5">
+        AI AGENT
+        <span class="px-1.5 py-[1px] rounded bg-ai-100 text-ai-600 text-[9px] font-bold">NEW</span>
+      </div>
+      <button class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-ink-muted hover:bg-ai-50" data-view="copilot">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3a4 4 0 0 1 4 4v1a4 4 0 0 1 0 8v1a4 4 0 0 1-8 0v-1a4 4 0 0 1 0-8V7a4 4 0 0 1 4-4Z"/><path d="M12 8v8"/></svg>
+        <span>分析顾问</span>
+      </button>
+      <button class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-ink-muted hover:bg-ai-50" data-view="review">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        <span>信号复核</span>
+      </button>
+      <button class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-ink-muted hover:bg-ai-50" data-view="daily">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg>
+        <span>盘后复盘</span>
+      </button>
+      <button class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-ink-muted hover:bg-ai-50" data-view="doctor">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/></svg>
+        <span>策略诊断</span>
+      </button>
+      <button class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-ink-muted hover:bg-ai-50" data-view="risk">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="M12 8v4M12 16h.01"/></svg>
+        <span>持仓风险</span>
+      </button>
+      <button class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-ink-muted hover:bg-ai-50" data-view="sell">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17l5-5 4 3 8-8"/><path d="M15 7h5v5"/></svg>
+        <span>卖出决策</span>
+      </button>
+      <button class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-ink-muted hover:bg-ai-50" data-view="orchestration">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="2.5"/><circle cx="5" cy="19" r="2.5"/><circle cx="19" cy="19" r="2.5"/><path d="M12 7.5v4M12 11.5 6.5 17M12 11.5 17.5 17"/></svg>
+        <span>Agent 编排</span>
+      </button>
+      <button class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-ink-muted hover:bg-brand-50" data-view="settings">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1l2-1.5-2-3.4-2.3 1a7 7 0 0 0-1.7-1l-.3-2.6h-4l-.3 2.6a7 7 0 0 0-1.7 1l-2.3-1-2 3.4 2 1.5a7 7 0 0 0 0 2l-2 1.5 2 3.4 2.3-1a7 7 0 0 0 1.7 1l.3 2.6h4l.3-2.6a7 7 0 0 0 1.7-1l2.3 1 2-3.4-2-1.5c.1-.3.1-.7.1-1z"/></svg>
+        <span>系统设置</span>
+      </button>
+    </nav>
+    <div class="mt-auto p-4 border-t border-line">
+      <div class="flex items-center gap-2 text-[12px] text-ink-muted">
+        <span class="dot bg-down"></span> 数据源：<b id="sideSource" class="text-ink">星耀数智</b>
+      </div>
+      <div class="text-[11px] text-ink-faint mt-1" id="sideSourceSub">账号在线 · 主源生效中</div>
+    </div>
+  </aside>
+
+  <!-- ============ 主区 ============ -->
+  <main class="flex-1 min-w-0">
+    <!-- 顶栏 -->
+    <header class="sticky top-0 z-20 bg-white/85 backdrop-blur border-b border-line px-6 py-3.5 flex items-center gap-4">
+      <div>
+        <h1 id="pageTitle" class="text-[20px] font-extrabold leading-tight">总览看板</h1>
+        <p id="pageSub" class="text-[12px] text-ink-faint">市场概览 · 自选实时行情 · 监控预警一站查看</p>
+      </div>
+      <div class="ml-auto flex items-center gap-3">
+        <span class="hidden md:inline-flex items-center gap-1.5 text-[12px] text-ink-muted">
+          <span class="dot bg-down"></span> 数据源 <b id="topSource" class="text-ink">星耀数智</b>
+        </span>
+        <label class="flex items-center gap-2 text-[12px] text-ink-muted cursor-pointer select-none">
+          <input id="autoToggle" type="checkbox" class="accent-brand-500 w-4 h-4" />
+          自动刷新
+        </label>
+        <button id="refreshBtn" class="px-3 py-1.5 rounded-lg bg-brand-50 text-brand-600 text-[13px] font-semibold hover:bg-brand-100">刷新行情</button>
+        <span class="text-[12px] text-ink-faint kbox" title="最近一次行情刷新时间；自动刷新开启时每 30 秒更新一次">行情 <b id="updatedAt" class="text-ink">--:--:--</b></span>
+        <button id="helpBtn" class="w-8 h-8 rounded-lg border border-line text-ink-muted hover:bg-brand-50" title="交互说明">?</button>
+      </div>
+    </header>
+
+    <div class="p-6 space-y-6">
+
+      <!-- ===================== 总览看板 ===================== -->
+      <section class="view active space-y-6" id="view-overview">
+        <!-- 说人话：现在怎么样 + 下一步做什么（后端 plain_summary 渲染） -->
+        <div id="plainSummary" class="hidden"></div>
+
+        <!-- 指数 + 数据源状态 -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4" id="indexStrip"></div>
+
+        <!-- 自选实时行情 -->
+        <div class="bg-white border border-line rounded-2xl shadow-card">
+          <div class="px-5 py-4 border-b border-line flex items-center justify-between">
+            <h2 class="font-bold text-[16px]">自选股实时行情</h2>
+            <span class="text-[12px] text-ink-faint">点击任意行查看个股详情</span>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="thin w-full text-[13px] min-w-[760px]">
+              <thead class="text-ink-faint">
+                <tr>
+                  <th class="text-left">名称 / 代码</th>
+                  <th class="text-right">最新价</th>
+                  <th class="text-right">涨跌幅</th>
+                  <th class="text-right">涨跌额</th>
+                  <th class="text-right">成交额</th>
+                  <th class="text-center" style="width:30%">分时</th>
+                  <th class="text-right">操作</th>
+                </tr>
+              </thead>
+              <tbody id="ovTable"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 持仓概述（持仓成本锁定不可调整） -->
+        <div class="bg-white border border-line rounded-2xl shadow-card">
+          <div class="px-5 py-4 border-b border-line flex items-center justify-between">
+            <h2 class="font-bold text-[16px]">持仓概述</h2>
+            <span class="tag bg-ink-50 text-ink-muted" title="持仓成本由持仓记录锁定，不可在此调整">🔒 成本锁定·不可调整</span>
+          </div>
+          <div id="posSummary" class="grid grid-cols-3 sm:grid-cols-6 gap-3 px-4 pt-4"></div>
+          <div class="p-3 overflow-x-auto">
+            <table class="thin w-full text-[13px] min-w-[760px]">
+              <thead class="text-ink-faint">
+                <tr>
+                  <th class="text-left">名称 / 代码</th>
+                  <th class="text-right">股数</th>
+                  <th class="text-right">持仓成本 (每股)</th>
+                  <th class="text-right">现价</th>
+                  <th class="text-right">持仓市值</th>
+                  <th class="text-right">浮动盈亏</th>
+                  <th class="text-right">盈亏率</th>
+                </tr>
+              </thead>
+              <tbody id="holdingsTable"></tbody>
+            </table>
+            <p class="text-[12px] hint mt-2">持仓成本为系统锁定值，不可在概览页调整；如需修改成本或股数，请打开对应股票的<b>个股详情抽屉</b>保存。</p>
+          </div>
+        </div>
+
+        <!-- 最近交易：对话记账的留痕，卖出才回收现金，所以必须有流水才看得清 -->
+        <div class="bg-white border border-line rounded-2xl shadow-card">
+          <div class="px-5 py-4 border-b border-line flex items-center justify-between">
+            <h2 class="font-bold text-[16px]">最近交易</h2>
+            <span class="tag bg-brand-50 text-brand-600" title="在「分析顾问」里用一句话报成交，系统自动记账并同步持仓与现金">对话记账</span>
+          </div>
+          <div class="p-3 overflow-x-auto">
+            <table class="thin w-full text-[13px] min-w-[680px]">
+              <thead class="text-ink-faint">
+                <tr>
+                  <th class="text-left">日期</th>
+                  <th class="text-left">方向</th>
+                  <th class="text-left">名称 / 代码</th>
+                  <th class="text-right">股数</th>
+                  <th class="text-right">成交价</th>
+                  <th class="text-right">费用</th>
+                  <th class="text-right">已实现盈亏</th>
+                  <th class="text-right">记后持股</th>
+                </tr>
+              </thead>
+              <tbody id="tradeTable"></tbody>
+            </table>
+            <p class="text-[12px] hint mt-2">
+              记账入口：在「分析顾问」里直接说 <b>「今天卖了巨人网络 500 股，27.35」</b>、<b>「加仓平安 300 股」</b>、<b>「华域清掉了」</b>，
+              Agent 会提取成交要素、重算摊薄成本与可用现金。卖出超过记录持股会被拦下，手续费按佣金万2.5（最低 5 元）+ 印花税 0.05% + 过户费 0.001% 估算。
+            </p>
+          </div>
+        </div>
+
+        <div class="grid lg:grid-cols-3 gap-4">
+          <!-- 监控预警摘要 -->
+          <div class="lg:col-span-3 bg-white border border-line rounded-2xl shadow-card">
+            <div class="px-5 py-4 border-b border-line flex items-center justify-between">
+              <h2 class="font-bold text-[16px]">监控预警摘要</h2>
+              <span class="tag bg-brand-50 text-brand-600">实时</span>
+            </div>
+            <ul id="alertFeed" class="p-3 space-y-2 text-[13px]"></ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== 自选股 ===================== -->
+      <section class="view" id="view-watchlist">
+        <div class="bg-white border border-line rounded-2xl shadow-card p-4">
+          <div class="flex flex-wrap items-end gap-3">
+            <div class="flex-1 min-w-[180px]">
+              <label class="text-[12px] text-ink-muted">股票代码</label>
+              <input id="favCode" placeholder="如 600519 或 sz000001" class="mt-1 w-full px-3 py-2.5 rounded-lg border border-line focus:outline-none focus:ring-2 focus:ring-brand-500/30" />
+            </div>
+            <div class="flex-1 min-w-[160px]">
+              <label class="text-[12px] text-ink-muted">名称（可选）</label>
+              <input id="favName" placeholder="如 贵州茅台" class="mt-1 w-full px-3 py-2.5 rounded-lg border border-line focus:outline-none focus:ring-2 focus:ring-brand-500/30" />
+            </div>
+            <div class="w-[160px]">
+              <label class="text-[12px] text-ink-muted">所属池（决定卖出与风控口径）</label>
+              <select id="favPool" class="mt-1 w-full px-3 py-2.5 rounded-lg border border-line bg-white">
+                <option value="" selected>未分类（稍后再定）</option>
+                <option value="dividend">股息</option>
+                <option value="catalyst">催化波段成长</option>
+                <option value="long_track">长赛道产业成长</option>
+                <option value="value">低估价值</option>
+              </select>
+            </div>
+            <div class="w-[150px]">
+              <label class="text-[12px] text-ink-muted">分组（可选）</label>
+              <input id="favGroup" list="favGroupOptions" placeholder="核心持仓 / 观察池" class="mt-1 w-full px-3 py-2.5 rounded-lg border border-line focus:outline-none focus:ring-2 focus:ring-brand-500/30" />
+              <datalist id="favGroupOptions"></datalist>
+            </div>
+            <button id="addFav" class="px-4 py-2.5 rounded-lg bg-brand-500 text-white font-semibold hover:bg-brand-600">加入自选</button>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2 mt-5">
+          <span class="text-[12px] text-ink-muted">分组视图</span>
+          <div id="wlGroupTabs" class="flex flex-wrap gap-2"></div>
+        </div>
+
+        <div id="wlGrid" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-3"></div>
+      </section>
+
+      <!-- ===================== 差价计算器 ===================== -->
+      <section class="view" id="view-calculator">
+        <div class="grid lg:grid-cols-5 gap-5">
+          <div class="lg:col-span-2 bg-white border border-line rounded-2xl shadow-card p-5 space-y-4">
+            <h2 class="font-bold text-[16px]">保本买回价计算</h2>
+            <div>
+              <label class="text-[12px] text-ink-muted">选择持仓</label>
+              <select id="calcStock" class="mt-1 w-full px-3 py-2.5 rounded-lg border border-line bg-white"></select>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div><label class="text-[12px] text-ink-muted">当前价 (元)</label><input id="calcPrice" type="number" class="mt-1 w-full px-3 py-2.5 rounded-lg border border-line" /></div>
+              <div><label class="text-[12px] text-ink-muted">持股数量</label><input id="calcShares" type="number" class="mt-1 w-full px-3 py-2.5 rounded-lg border border-line" /></div>
+              <div><label class="text-[12px] text-ink-muted">持仓成本 (每股)</label><input id="calcCost" type="number" class="mt-1 w-full px-3 py-2.5 rounded-lg border border-line" /></div>
+              <div><label class="text-[12px] text-ink-muted">综合费率 %</label><input id="calcFee" type="number" value="0.15" class="mt-1 w-full px-3 py-2.5 rounded-lg border border-line" /></div>
+            </div>
+            <p class="text-[12px] hint">卖出后若想不亏本买回，目标价需回补到该价格。公式已计入卖出手续费与买回成本（默认综合费率含佣金+印花税约 0.15%）。</p>
+          </div>
+          <div class="lg:col-span-3 bg-white border border-line rounded-2xl shadow-card p-5">
+            <h2 class="font-bold text-[16px] mb-4">计算结果</h2>
+            <div class="grid sm:grid-cols-3 gap-3" id="calcOut"></div>
+            <div class="mt-5 p-4 rounded-xl bg-brand-50 text-[13px] text-ink-muted" id="calcNote"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== 四池配置 ===================== -->
+      <section class="view" id="view-pools">
+        <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 class="font-bold text-[18px]"><span data-term="pool">四池配置</span></h2>
+            <p class="text-[12px] text-ink-faint mt-1">股息 / 催化波段成长 / 长赛道产业成长 / 低估价值 + 现金；比例区间与单票上限由规则决定，Agent 只在区间内给建议。</p>
+          </div>
+          <div class="flex gap-2">
+            <button id="poolsRefresh" class="px-3 py-2 rounded-lg border border-line text-[13px] hover:bg-brand-50">刷新</button>
+            <button id="poolsEditToggle" class="px-3 py-2 rounded-lg border border-line text-[13px] hover:bg-brand-50">调整比例</button>
+            <button id="poolsMakeProposal" class="px-3 py-2 rounded-lg bg-brand-500 text-white text-[13px] font-semibold hover:bg-brand-600">生成再平衡建议</button>
+          </div>
+        </div>
+
+        <div id="poolsRisk" class="bg-white border border-line rounded-2xl shadow-card p-4 mb-4 text-[13px]"></div>
+        <div id="poolsCards" class="grid sm:grid-cols-2 lg:grid-cols-5 gap-3"></div>
+        <div id="poolsDiscipline" class="bg-white border border-line rounded-2xl shadow-card p-4 mt-4 text-[13px]"></div>
+
+        <div id="poolsEditor" class="hidden bg-white border border-line rounded-2xl shadow-card p-4 mt-4">
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+            <div class="font-semibold text-[14px]">调整池比例</div>
+            <div class="text-[11px] text-ink-faint">四池目标 + 现金目标须等于 100%；保存后立即生效（写入 config/decision_rules.json，自动留 .bak）</div>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-[12px]">
+              <thead class="text-ink-faint">
+                <tr>
+                  <th class="text-left font-normal py-1 pr-2">池</th>
+                  <th class="text-right font-normal py-1 px-1">目标 %</th>
+                  <th class="text-right font-normal py-1 px-1">下限 %</th>
+                  <th class="text-right font-normal py-1 px-1">上限 %</th>
+                  <th class="text-right font-normal py-1 px-1">单票上限 %</th>
+                  <th class="text-right font-normal py-1 pl-1">最多只数</th>
+                </tr>
+              </thead>
+              <tbody id="poolsEditorRows"></tbody>
+            </table>
+          </div>
+          <div id="poolsEditorTotal" class="text-[12px] mt-2"></div>
+          <div id="poolsEditorError" class="text-[12px] text-red-600 mt-1"></div>
+          <div class="flex gap-2 mt-3">
+            <button id="poolsEditorSave" class="px-3 py-2 rounded-lg bg-brand-500 text-white text-[13px] font-semibold hover:bg-brand-600">保存</button>
+            <button id="poolsEditorCancel" class="px-3 py-2 rounded-lg border border-line text-[13px] hover:bg-brand-50">取消</button>
+          </div>
+        </div>
+
+        <div class="grid lg:grid-cols-2 gap-4 mt-4">
+          <div class="bg-white border border-line rounded-2xl shadow-card p-4">
+            <div class="flex items-center justify-between mb-2">
+              <div class="font-semibold text-[14px]">持仓分类</div>
+              <button id="poolsSuggest" class="px-2.5 py-1.5 rounded-lg border border-line text-[12px] hover:bg-brand-50">Agent 初判</button>
+            </div>
+            <div class="text-[12px] text-ink-faint mb-2">未分类持仓会让占比与风控失真；先给每只票选一个池。Agent 只给建议，采纳后才落库。</div>
+            <div id="poolsSuggestions" class="space-y-2 mb-2"></div>
+            <div id="poolsHoldings" class="space-y-2"></div>
+          </div>
+          <div class="bg-white border border-line rounded-2xl shadow-card p-4">
+            <div class="font-semibold text-[14px] mb-2">再平衡建议 <span class="text-[11px] text-ink-faint font-normal">（只在 ±带宽外提示）</span></div>
+            <div id="poolsRebalance" class="space-y-2 text-[13px]"></div>
+          </div>
+        </div>
+
+        <div class="bg-white border border-line rounded-2xl shadow-card p-4 mt-4">
+          <div class="flex items-center justify-between mb-2">
+            <div class="font-semibold text-[14px]">建议单 · 两道确认</div>
+            <div class="text-[11px] text-ink-faint">采纳（第一道）→ 确认执行（第二道）才写台账；不自动下单</div>
+          </div>
+          <div id="poolsProposals" class="space-y-2 text-[13px]"></div>
+        </div>
+      </section>
+
+      <!-- ===================== 绩效复盘 ===================== -->
+      <section class="view" id="view-performance">
+        <div class="bg-white border border-line rounded-2xl shadow-card p-4 flex flex-wrap items-end gap-3">
+          <div class="w-[150px]">
+            <label class="text-[12px] text-ink-muted">统计窗口</label>
+            <select id="perfDays" class="mt-1 w-full px-3 py-2.5 rounded-lg border border-line bg-white">
+              <option value="90">近 3 个月</option>
+              <option value="180" selected>近 6 个月</option>
+              <option value="365">近 1 年</option>
+              <option value="730">近 2 年</option>
+            </select>
+          </div>
+          <button id="perfRefresh" class="px-4 py-2.5 rounded-lg bg-brand-500 text-white font-semibold hover:bg-brand-600">刷新绩效</button>
+          <span class="text-[12px] text-ink-faint">权益 = 现金 + 持仓市值，由交易流水逐日重放得出；基准为沪深 300 同起点归一化</span>
+        </div>
+
+        <div id="perfCards" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mt-5"></div>
+
+        <div class="bg-white border border-line rounded-2xl shadow-card mt-5">
+          <div class="px-5 py-4 border-b border-line flex items-center justify-between">
+            <h2 class="font-bold text-[16px]">净值曲线</h2>
+            <div class="flex items-center gap-4 text-[12px] text-ink-muted">
+              <span class="flex items-center gap-1.5"><i class="w-3 h-[2px] bg-brand-500 inline-block"></i>账户权益</span>
+              <span class="flex items-center gap-1.5"><i class="w-3 h-[2px] bg-ink-faint inline-block"></i>沪深300</span>
+            </div>
+          </div>
+          <div id="perfChart" class="p-4 min-h-[260px] flex items-center justify-center text-ink-faint text-[13px]">加载中…</div>
+        </div>
+
+        <div class="grid lg:grid-cols-2 gap-5 mt-5">
+          <div class="bg-white border border-line rounded-2xl shadow-card">
+            <div class="px-5 py-4 border-b border-line"><h2 class="font-bold text-[16px]">持仓贡献</h2></div>
+            <div class="p-3 overflow-x-auto">
+              <table class="thin w-full text-[13px] min-w-[520px]">
+                <thead class="text-ink-faint"><tr>
+                  <th class="text-left">名称 / 代码</th><th class="text-right">股数</th><th class="text-right">成本</th>
+                  <th class="text-right">现价</th><th class="text-right">市值</th><th class="text-right">浮盈</th>
+                </tr></thead>
+                <tbody id="perfPositions"><tr><td colspan="6" class="text-center muted py-6">加载中…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="bg-white border border-line rounded-2xl shadow-card">
+            <div class="px-5 py-4 border-b border-line"><h2 class="font-bold text-[16px]">口径与提示</h2></div>
+            <div id="perfNotes" class="p-5 text-[12.5px] text-ink-muted leading-relaxed space-y-2">
+              <p>· 曲线末端严格等于「当前可用资金 + 当前持仓市值」，与账户卡片一致。</p>
+              <p>· 最大回撤按权益峰值回落计算；夏普用日收益年化（无风险利率按 0 处理）。</p>
+              <p>· 胜率与盈亏比只统计带已实现盈亏的卖出记录。</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== 回测 ===================== -->
+      <section class="view" id="view-backtest">
+        <div class="grid lg:grid-cols-3 gap-5">
+          <!-- 回测配置 -->
+          <div class="bg-white border border-line rounded-2xl shadow-card p-5 space-y-4">
+            <div class="flex items-center justify-between">
+              <h2 class="font-bold text-[16px]">回测配置</h2>
+              <span class="tag bg-brand-50 text-brand-600">日线 · 次日开盘成交</span>
+            </div>
+            <div>
+              <label class="text-[12px] text-ink-muted">回测标的（自选股）</label>
+              <select id="btStock" class="mt-1 w-full px-3 py-2.5 rounded-lg border border-line bg-white"></select>
+            </div>
+            <div>
+              <label class="text-[12px] text-ink-muted">或手动输入代码</label>
+              <input id="btCode" placeholder="如 600519 / sh000300，留空则用上面的自选股" class="mt-1 w-full px-3 py-2.5 rounded-lg border border-line focus:outline-none focus:ring-2 focus:ring-brand-500/30" />
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div><label class="text-[12px] text-ink-muted">开始日期</label><input id="btStart" type="date" class="mt-1 w-full px-3 py-2.5 rounded-lg border border-line" /></div>
+              <div><label class="text-[12px] text-ink-muted">结束日期</label><input id="btEnd" type="date" class="mt-1 w-full px-3 py-2.5 rounded-lg border border-line" /></div>
+            </div>
+            <div>
+              <label class="text-[12px] text-ink-muted">策略（已保存的表达式策略）</label>
+              <select id="btStrategy" class="mt-1 w-full px-3 py-2.5 rounded-lg border border-line bg-white">
+                <option value="__custom__">自定义表达式</option>
+              </select>
+            </div>
+            <div class="space-y-2">
+              <div>
+                <label class="text-[12px] text-ink-muted">入场条件</label>
+                <input id="btEntry" placeholder="如 CROSS(DIF, DEA)" class="mt-1 w-full px-3 py-2 rounded-lg border border-line kbox text-[12px] focus:outline-none focus:ring-2 focus:ring-brand-500/30" />
+              </div>
+              <div>
+                <label class="text-[12px] text-ink-muted">出场条件</label>
+                <input id="btExit" placeholder="如 CROSS(DEA, DIF)" class="mt-1 w-full px-3 py-2 rounded-lg border border-line kbox text-[12px] focus:outline-none focus:ring-2 focus:ring-brand-500/30" />
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div><label class="text-[12px] text-ink-muted">初始资金(元)</label><input id="btCapital" type="number" value="100000" class="mt-1 w-full px-3 py-2.5 rounded-lg border border-line" /></div>
+              <div>
+                <label class="text-[12px] text-ink-muted">对比基准</label>
+                <select id="btBench" class="mt-1 w-full px-3 py-2.5 rounded-lg border border-line bg-white">
+                  <option value="hs300" selected>沪深300</option>
+                  <option value="zz500">中证500</option>
+                  <option value="sh">上证指数</option>
+                  <option value="sz">深证成指</option>
+                  <option value="none">不作对比</option>
+                </select>
+              </div>
+            </div>
+            <details class="rounded-xl border border-line px-3 py-2">
+              <summary class="text-[12px] text-ink-muted cursor-pointer select-none">高级：费率 / 滑点 / 仓位</summary>
+              <div class="grid grid-cols-3 gap-2 mt-3">
+                <div><label class="text-[11px] text-ink-faint">每边费率%</label><input id="btFee" type="number" step="0.01" value="0.075" class="mt-1 w-full px-2 py-1.5 rounded-lg border border-line text-[12px]" /></div>
+                <div><label class="text-[11px] text-ink-faint">滑点%</label><input id="btSlippage" type="number" step="0.01" value="0.1" class="mt-1 w-full px-2 py-1.5 rounded-lg border border-line text-[12px]" /></div>
+                <div><label class="text-[11px] text-ink-faint">仓位%</label><input id="btPosition" type="number" step="5" value="100" class="mt-1 w-full px-2 py-1.5 rounded-lg border border-line text-[12px]" /></div>
+              </div>
+            </details>
+            <div class="flex gap-2">
+              <button id="btRun" class="flex-1 px-4 py-2.5 rounded-lg bg-brand-500 text-white font-semibold hover:bg-brand-600">运行回测</button>
+              <button id="btSaveFactor" class="px-4 py-2.5 rounded-lg border border-line text-[13px] font-semibold hover:bg-brand-50" title="把当前回测配置保存为因子">存为因子</button>
+            </div>
+            <p class="text-[12px] hint">信号在当日收盘后判定、次日开盘成交，已计入手续费与滑点。历史回测不代表未来表现。</p>
+          </div>
+
+          <!-- 回测结果 -->
+          <div class="lg:col-span-2 space-y-5">
+            <div id="btSummary" class="rounded-xl bg-brand-50 px-4 py-3 text-[12px] text-ink-muted">选择标的与区间后点击「运行回测」。</div>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3" id="btMetrics"></div>
+            <div class="bg-white border border-line rounded-2xl shadow-card p-5">
+              <div class="flex items-center justify-between mb-3">
+                <h2 class="font-bold text-[16px]">策略净值 vs 基准</h2>
+                <div class="flex gap-3 text-[11px]"><span class="text-brand-600">■ 策略</span><span class="text-ink-faint">■ 基准</span></div>
+              </div>
+              <div id="btEquity"><div class="text-[12px] hint py-10 text-center">暂无回测结果</div></div>
+            </div>
+            <div class="bg-white border border-line rounded-2xl shadow-card p-5">
+              <div class="flex items-center justify-between mb-3">
+                <h2 class="font-bold text-[16px]">交易记录</h2>
+                <span id="btTradeCount" class="text-[12px] text-ink-faint">-</span>
+              </div>
+              <div class="overflow-x-auto max-h-[360px] overflow-y-auto">
+                <table class="thin w-full text-[13px] min-w-[520px]">
+                  <thead class="text-ink-faint sticky top-0 bg-white">
+                    <tr><th class="text-right">交易日</th><th class="text-right">方向</th><th class="text-right">成交价</th><th class="text-right">股数</th><th class="text-right">费用</th><th class="text-right">盈亏%</th></tr>
+                  </thead>
+                  <tbody id="btTrades"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 策略诊断 -->
+        <div class="bg-white border border-line rounded-2xl shadow-card p-5">
+          <div class="flex items-center justify-between">
+            <h2 class="font-bold text-[16px]">策略诊断</h2>
+            <button id="btDiag" class="px-4 py-2 rounded-lg border border-line text-[13px] font-semibold hover:bg-brand-50">诊断并给出改进建议</button>
+          </div>
+          <p class="text-[12px] hint mt-2">基于本次回测指标做规则化诊断（结果不理想时系统还会自动投递给「策略诊断」场景），建议回「四池配置」页核对池规则与仓位上限。</p>
+          <div id="btDiagOut" class="mt-3 hidden space-y-2"></div>
+        </div>
+        <div id="backtestExtras"></div>
+      </section>
+
+      <!-- ===================== 策略因子库 ===================== -->
+      <section class="view" id="view-factors">
+        <div class="flex items-center justify-between mb-5">
+          <div>
+            <h2 class="font-bold text-[18px]">策略因子库</h2>
+            <p class="text-[12px] text-ink-faint mt-1">集中管理回测验证过的表达式因子，支持增删改查；分析顾问也能直接调用这些因子去回测或判定信号。</p>
+          </div>
+          <button id="factorNew" class="px-4 py-2.5 rounded-lg bg-brand-500 text-white font-semibold hover:bg-brand-600">+ 新建因子</button>
+        </div>
+        <div class="bg-white border border-line rounded-2xl shadow-card overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="thin w-full text-[13px] min-w-[880px]">
+              <thead class="text-ink-faint"><tr>
+                <th class="text-left">名称</th><th class="text-left">说明</th>
+                <th class="text-left">入场</th><th class="text-left">出场</th>
+                <th class="text-left">基准</th>
+                <th class="text-right">最近回测</th>
+                <th class="text-left">更新时间</th><th class="text-left">操作</th>
+              </tr></thead>
+              <tbody id="factorRows"><tr><td colspan="8" class="text-center muted py-6">加载中…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== 系统设置 ===================== -->
+      <section class="view" id="view-settings">
+        <div class="grid lg:grid-cols-2 gap-5">
+          <!-- 监控设置 -->
+          <div class="bg-white border border-line rounded-2xl shadow-card p-5 space-y-4">
+            <div class="flex items-center justify-between">
+              <h2 class="font-bold text-[16px]">监控设置</h2>
+              <button id="saveMonitorSet" class="px-4 py-1.5 rounded-lg bg-brand-500 text-white text-[13px] font-semibold hover:bg-brand-600">保存监控设置</button>
+            </div>
+            <label class="flex items-center justify-between text-[13px]"><span>启用自动监控</span><input id="setMonitor" type="checkbox" class="accent-brand-500 w-4 h-4"/></label>
+            <div id="acctStatus" class="rounded-xl border border-line bg-ink-faint/10 px-3 py-2.5 text-[11.5px] text-ink-muted leading-relaxed">
+              正在读取账户状态…
+            </div>
+            <div id="sentimentPanel" class="rounded-xl border border-line bg-ink-faint/10 px-3 py-2.5 text-[11.5px] text-ink-muted leading-relaxed">
+              正在读取市场情绪…
+            </div>
+            <div id="sentimentCurve" class="rounded-xl border border-line bg-ink-faint/10 px-3 py-2 text-[11.5px] text-ink-muted leading-relaxed">
+              正在读取情绪历史曲线…
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div><label class="text-[12px] text-ink-muted">投入本金</label><input id="setCapital" type="number" class="mt-1 w-full px-3 py-2.5 rounded-lg border border-line" />
+                <div class="text-[10px] text-ink-faint mt-1 leading-snug">累计投入的钱，用于算总收益率；它不是账户总资产</div></div>
+              <div><label class="text-[12px] text-ink-muted">账户可用资金 (元)</label><input id="setAmmo" type="number" min="0" placeholder="券商里的可用余额" title="券商账户里的可用资金。填 0 表示已满仓（不再提醒买入）；留空则按「本金−持仓成本」估算，卖出过会偏大" class="mt-1 w-full px-3 py-2.5 rounded-lg border border-line" />
+                <div class="text-[10px] text-ink-faint mt-1 leading-snug">填 <b class="text-ink-muted">0</b> = 满仓（只提醒卖出）；留空 = 按本金−成本估算</div></div>
+              <div><label class="text-[12px] text-ink-muted">监控间隔(秒)</label><input id="setInterval" type="number" class="mt-1 w-full px-3 py-2.5 rounded-lg border border-line" /></div>
+              <div><label class="text-[12px] text-ink-muted">未分类持仓的卖出风格</label>
+                <select id="setStyle" title="已归入四池的持仓按池自动映射（股息/低估→长线、长赛道→中长线、催化→波段），此处只对「未分类」持仓生效" class="mt-1 w-full px-3 py-2.5 rounded-lg border border-line bg-white">
+                  <option value="long">长线（数月以上，容忍波动）</option>
+                  <option value="mid_long">中长线（趋势持有，数周至数月）</option>
+                  <option value="swing">波段（数日到数周）</option>
+                </select>
+              </div>
+            </div>
+            <div><label class="text-[12px] text-ink-muted">K线周期</label>
+              <select id="setFreq" class="mt-1 w-full px-3 py-2.5 rounded-lg border border-line bg-white">
+                <option value="d">日K</option><option value="w">周K</option><option value="m">月K</option><option value="15">15分钟</option><option value="60">60分钟</option>
+              </select></div>
+            <div class="grid grid-cols-2 gap-3">
+              <div><label class="text-[12px] text-ink-muted">监控策略</label><select id="monitorStrategy" class="mt-1 w-full px-3 py-2.5 rounded-lg border border-line bg-white"><option value="">系统默认监控</option></select></div>
+              <div class="flex items-end"><button id="saveMonitorStrategy" class="w-full px-4 py-2.5 rounded-lg border border-line text-[13px] font-semibold hover:bg-brand-50">保存监控策略</button></div>
+            </div>
+          </div>
+
+          <!-- 数据源切换 (新增) -->
+          <div class="bg-white border border-line rounded-2xl shadow-card p-5 space-y-4">
+            <div class="flex items-center justify-between">
+              <h2 class="font-bold text-[16px]">行情数据源</h2>
+              <span id="srcPill" class="tag bg-down/10 text-down">星耀数智 · 在线</span>
+            </div>
+            <p class="text-[12px] hint">星耀数智官方 Python SDK 已接入，作为实时行情主源；可一键切换回雪球兜底。切换无需重启。</p>
+            <div class="grid grid-cols-2 gap-3" id="srcSeg">
+              <button data-src="amazingdata" class="seg-btn active px-4 py-3 rounded-xl border border-line text-[13px] font-semibold">星耀数智</button>
+              <button data-src="xueqiu" class="seg-btn px-4 py-3 rounded-xl border border-line text-[13px] font-semibold">雪球</button>
+            </div>
+            <div id="xqBox" class="hidden space-y-3 border-t border-line pt-3">
+              <div><label class="text-[12px] text-ink-muted">雪球 Cookie</label><input id="xqCookie" placeholder="可选，提高雪球接口稳定性" class="mt-1 w-full px-3 py-2.5 rounded-lg border border-line" /></div>
+              <div><label class="text-[12px] text-ink-muted">雪球 User-Agent</label><input id="xqUA" placeholder="可选" class="mt-1 w-full px-3 py-2.5 rounded-lg border border-line" /></div>
+            </div>
+            <button id="saveSrc" class="px-4 py-2 rounded-lg bg-brand-500 text-white font-semibold hover:bg-brand-600">保存数据源</button>
+          </div>
+
+          <!-- 钉钉提醒 -->
+          <div class="bg-white border border-line rounded-2xl shadow-card p-5 space-y-4">
+            <div class="flex items-center justify-between">
+              <h2 class="font-bold text-[16px]">钉钉提醒</h2>
+              <button id="testDing" class="px-4 py-1.5 rounded-lg border border-line text-[13px] font-semibold hover:bg-brand-50">发送测试提醒</button>
+            </div>
+            <label class="flex items-center justify-between text-[13px]"><span>启用钉钉提醒</span><input id="setDing" type="checkbox" class="accent-brand-500 w-4 h-4"/></label>
+            <div class="grid md:grid-cols-2 gap-3">
+              <div class="md:col-span-2"><label class="text-[12px] text-ink-muted">Webhook</label><input id="setDingWebhook" placeholder="钉钉机器人 webhook，留空不发送" class="mt-1 w-full px-3 py-2.5 rounded-lg border border-line" /></div>
+              <div><label class="text-[12px] text-ink-muted">加签 Secret</label><input id="setDingSecret" type="password" placeholder="安全设置里的加签密钥" class="mt-1 w-full px-3 py-2.5 rounded-lg border border-line" /></div>
+              <div><label class="text-[12px] text-ink-muted">钉钉账号(可选)</label><input id="setDingAccount" placeholder="接收人钉钉账号" class="mt-1 w-full px-3 py-2.5 rounded-lg border border-line" /></div>
+            </div>
+          </div>
+
+          <!-- 更多通知渠道（默认关闭，按需启用） -->
+          <div class="bg-white border border-line rounded-2xl shadow-card p-5 space-y-4">
+            <div class="flex items-center justify-between">
+              <h2 class="font-bold text-[16px]">更多通知渠道</h2>
+              <span class="text-[12px] text-ink-muted">与钉钉同时发送，默认全部关闭</span>
+            </div>
+            <div class="grid sm:grid-cols-2 gap-x-4 gap-y-3">
+              <label class="flex items-center gap-2 text-[13px]"><input id="setFeishuEnabled" type="checkbox" class="accent-brand-500 w-4 h-4"/> 启用飞书</label>
+              <label class="flex items-center gap-2 text-[13px]"><input id="setWecomEnabled" type="checkbox" class="accent-brand-500 w-4 h-4"/> 启用企业微信</label>
+              <div class="sm:col-span-2"><label class="text-[12px] text-ink-muted">飞书机器人 Webhook</label><input id="setFeishuWebhook" placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/..." class="mt-1 w-full px-3 py-2 rounded-lg border border-line" /></div>
+              <div class="sm:col-span-2"><label class="text-[12px] text-ink-muted">飞书加签 Secret（可选）</label><input id="setFeishuSecret" type="password" placeholder="安全设置里的签名校验密钥" class="mt-1 w-full px-3 py-2 rounded-lg border border-line" /></div>
+              <div class="sm:col-span-2"><label class="text-[12px] text-ink-muted">企业微信机器人 Webhook</label><input id="setWecomWebhook" placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=..." class="mt-1 w-full px-3 py-2 rounded-lg border border-line" /></div>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <button id="testFeishu" class="px-3 py-1.5 rounded-lg border border-line text-[13px] font-semibold hover:bg-brand-50">测试飞书</button>
+              <button id="testWecom" class="px-3 py-1.5 rounded-lg border border-line text-[13px] font-semibold hover:bg-brand-50">测试企业微信</button>
+            </div>
+            <p class="text-[12px] text-ink-muted">提示：新渠道不启用时完全不发；测试按钮直接读取上方填写的地址，无需先保存。</p>
+            <div class="border-t border-line pt-3 space-y-2">
+              <label class="flex items-center gap-2 text-[13px]"><input id="setQuietEnabled" type="checkbox" class="accent-brand-500 w-4 h-4"/> 免打扰时段（对所有渠道生效）</label>
+              <div class="flex flex-wrap items-center gap-2">
+                <input id="setQuietStart" type="time" class="px-3 py-2 rounded-lg border border-line" />
+                <span class="text-[12px] text-ink-muted">至</span>
+                <input id="setQuietEnd" type="time" class="px-3 py-2 rounded-lg border border-line" />
+                <button id="saveQuiet" class="px-3 py-1.5 rounded-lg border border-line text-[13px] font-semibold hover:bg-brand-50">保存时段</button>
+              </div>
+              <p class="text-[12px] text-ink-muted">按本机时间，跨午夜也有效（如 23:00 至 07:00）。时段内自动提醒不发送；手动点「测试」不受限制。</p>
+            </div>
+          </div>
+
+          <!-- 提醒规则 -->
+          <div class="bg-white border border-line rounded-2xl shadow-card p-5 space-y-4">
+            <div class="flex items-center justify-between">
+              <h2 class="font-bold text-[16px]">提醒规则</h2>
+              <button id="saveAlertRules" class="px-4 py-1.5 rounded-lg bg-brand-500 text-white text-[13px] font-semibold hover:bg-brand-600">保存提醒规则</button>
+            </div>
+            <div class="grid sm:grid-cols-2 gap-x-4 gap-y-3">
+              <label class="flex items-center gap-2 text-[13px]"><input id="alertUpEnabled" type="checkbox" class="accent-brand-500 w-4 h-4"/> 启用涨幅提醒</label>
+              <label class="flex items-center gap-2 text-[13px]"><input id="alertDownEnabled" type="checkbox" class="accent-brand-500 w-4 h-4"/> 启用跌幅提醒</label>
+              <div><label class="text-[12px] text-ink-muted">涨幅阈值%</label><input id="alertUpThreshold" type="number" step="0.1" class="mt-1 w-full px-3 py-2 rounded-lg border border-line" /></div>
+              <div><label class="text-[12px] text-ink-muted">跌幅阈值%</label><input id="alertDownThreshold" type="number" step="0.1" class="mt-1 w-full px-3 py-2 rounded-lg border border-line" /></div>
+              <div><label class="text-[12px] text-ink-muted">涨幅升级档位</label><input id="alertUpLevels" placeholder="3,5,8" class="mt-1 w-full px-3 py-2 rounded-lg border border-line" /></div>
+              <div><label class="text-[12px] text-ink-muted">跌幅升级档位</label><input id="alertDownLevels" placeholder="3,5,8" class="mt-1 w-full px-3 py-2 rounded-lg border border-line" /></div>
+              <div><label class="text-[12px] text-ink-muted">涨幅回落重置%</label><input id="alertUpReset" type="number" step="0.1" class="mt-1 w-full px-3 py-2 rounded-lg border border-line" /></div>
+              <div><label class="text-[12px] text-ink-muted">跌幅回升重置%</label><input id="alertDownReset" type="number" step="0.1" class="mt-1 w-full px-3 py-2 rounded-lg border border-line" /></div>
+              <label class="sm:col-span-2 flex items-center gap-2 text-[13px]"><input id="alertStrategyEnabled" type="checkbox" class="accent-brand-500 w-4 h-4"/> 启用策略信号提醒</label>
+            </div>
+          </div>
+
+          <!-- 服务端调度：不依赖前端页面，没开浏览器也会推送 -->
+          <div class="lg:col-span-2 bg-white border border-line rounded-2xl shadow-card p-5 space-y-4">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h2 class="font-bold text-[16px]">服务端自动监控</h2>
+                <p class="text-[12px] hint mt-1">后台按交易时段自动跑监控并推送，<b>不需要打开页面</b>；关掉浏览器也会照常提醒。</p>
+              </div>
+              <div class="flex items-center gap-2">
+                <span id="schedPill" class="tag bg-ink-50 text-ink-muted">读取中…</span>
+                <button id="schedRun" class="px-4 py-1.5 rounded-lg border border-line text-[13px] font-semibold hover:bg-brand-50">立即运行一次</button>
+              </div>
+            </div>
+            <div id="schedSummary" class="rounded-xl border border-line bg-ink-faint/10 px-3 py-2.5 text-[12px] text-ink-muted leading-relaxed">正在读取调度状态…</div>
+            <div class="overflow-x-auto">
+              <table class="thin w-full text-[12.5px] min-w-[600px]">
+                <thead class="text-ink-faint"><tr>
+                  <th class="text-left">账号</th><th class="text-center">启用</th><th class="text-right">间隔</th>
+                  <th class="text-left">上次运行</th><th class="text-right">耗时</th><th class="text-left">结果</th>
+                </tr></thead>
+                <tbody id="schedUsers"><tr><td colspan="6" class="text-center muted py-4">加载中…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- 告警历史 -->
+          <div class="lg:col-span-2 bg-white border border-line rounded-2xl shadow-card">
+            <div class="px-5 py-4 border-b border-line flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h2 class="font-bold text-[16px]">告警推送历史</h2>
+                <p class="text-[12px] hint mt-1">推过什么、成没成，都在这里；排查「昨晚为什么没收到提醒」靠它。</p>
+              </div>
+              <div class="flex items-center gap-2">
+                <select id="alertLogFilter" class="px-3 py-1.5 rounded-lg border border-line bg-white text-[12.5px]">
+                  <option value="">全部</option>
+                  <option value="failed">只看失败</option>
+                </select>
+                <button id="alertLogRefresh" class="px-4 py-1.5 rounded-lg border border-line text-[13px] font-semibold hover:bg-brand-50">刷新</button>
+              </div>
+            </div>
+            <div id="alertLogList" class="p-3 space-y-2 text-[12.5px] max-h-[420px] overflow-y-auto">加载中…</div>
+          </div>
+
+          <!-- 数据备份（管理员） -->
+          <div id="backupCard" class="hidden lg:col-span-2 bg-white border border-line rounded-2xl shadow-card p-5 space-y-4">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h2 class="font-bold text-[16px]">数据备份</h2>
+                <p class="text-[12px] hint mt-1">每天自动快照一次，保留 14 天；恢复前会自动再存一份当前库，避免恢复错文件。</p>
+              </div>
+              <div class="flex items-center gap-2">
+                <span id="backupStat" class="tag bg-ink-50 text-ink-muted">读取中…</span>
+                <button id="backupRun" class="px-4 py-1.5 rounded-lg bg-brand-500 text-white text-[13px] font-semibold hover:bg-brand-600">立即备份</button>
+              </div>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="thin w-full text-[12.5px] min-w-[520px]">
+                <thead class="text-ink-faint"><tr>
+                  <th class="text-left">文件</th><th class="text-right">大小</th><th class="text-left">时间</th><th class="text-right">操作</th>
+                </tr></thead>
+                <tbody id="backupList"><tr><td colspan="4" class="text-center muted py-4">加载中…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- 审计日志（管理员） -->
+          <div id="auditCard" class="hidden lg:col-span-2 bg-white border border-line rounded-2xl shadow-card">
+            <div class="px-5 py-4 border-b border-line flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h2 class="font-bold text-[16px]">操作审计</h2>
+                <p class="text-[12px] hint mt-1">谁在什么时候改了仓、改了配置。只记录会改状态的请求，GET 不记。</p>
+              </div>
+              <div class="flex items-center gap-2">
+                <input id="auditPathFilter" placeholder="按路径过滤，如 trade" class="px-3 py-1.5 rounded-lg border border-line text-[12.5px]" />
+                <button id="auditRefresh" class="px-4 py-1.5 rounded-lg border border-line text-[13px] font-semibold hover:bg-brand-50">刷新</button>
+              </div>
+            </div>
+            <div id="auditList" class="p-3 space-y-1.5 text-[12px] max-h-[360px] overflow-y-auto">加载中…</div>
+          </div>
+
+          <!-- 模型配置（管理员） -->
+          <div id="modelCard" class="bg-white border border-line rounded-2xl shadow-card p-5 space-y-4">
+            <div class="flex items-start justify-between gap-2">
+              <div>
+                <h2 class="font-bold text-[16px]">模型配置</h2>
+                <p class="text-[12px] hint mt-1">AI 分析用的模型与 API Key。接口只回传打码预览；生产建议用环境变量注入，密钥不落盘。</p>
+              </div>
+              <span id="modelState" class="tag bg-ink-50 text-ink-muted">读取中…</span>
+            </div>
+            <div class="grid md:grid-cols-2 gap-3">
+              <div><label class="text-[12px] text-ink-muted">服务商</label>
+                <select id="modelProvider" class="mt-1 w-full px-3 py-2.5 rounded-lg border border-line bg-white">
+                  <option value="openai">OpenAI</option><option value="openai_compat">OpenAI 兼容</option>
+                  <option value="deepseek">DeepSeek</option><option value="modelscope">ModelScope</option>
+                  <option value="anthropic">Anthropic</option><option value="gemini">Gemini</option>
+                </select></div>
+              <div><label class="text-[12px] text-ink-muted">模型名</label><input id="modelName" class="mt-1 w-full px-3 py-2.5 rounded-lg border border-line" /></div>
+              <div><label class="text-[12px] text-ink-muted">API Key（留空保留原值）</label><input id="modelKey" type="password" autocomplete="new-password" placeholder="不修改请留空" class="mt-1 w-full px-3 py-2.5 rounded-lg border border-line" /></div>
+              <div><label class="text-[12px] text-ink-muted">Base URL</label><input id="modelBase" class="mt-1 w-full px-3 py-2.5 rounded-lg border border-line" /></div>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <button id="modelSave" class="px-4 py-2 rounded-lg bg-brand-500 text-white text-[13px] font-semibold hover:bg-brand-600">保存模型配置</button>
+              <button id="modelRefresh" class="px-4 py-2 rounded-lg border border-line text-[13px] font-semibold hover:bg-brand-50">刷新</button>
+            </div>
+            <div id="modelHint" class="text-[11.5px] hint leading-relaxed"></div>
+          </div>
+
+          <!-- 账号与数据 -->
+          <div class="bg-white border border-line rounded-2xl shadow-card p-5 space-y-4">
+            <div><h2 class="font-bold text-[16px]">账号与数据</h2>
+              <p class="text-[12px] hint mt-1">修改口令需重新登录其它设备；导出为当前用户的完整数据快照。</p></div>
+            <div class="grid md:grid-cols-2 gap-3">
+              <div><label class="text-[12px] text-ink-muted">原口令</label><input id="pwdOld" type="password" autocomplete="current-password" class="mt-1 w-full px-3 py-2.5 rounded-lg border border-line" /></div>
+              <div><label class="text-[12px] text-ink-muted">新口令</label><input id="pwdNew" type="password" autocomplete="new-password" class="mt-1 w-full px-3 py-2.5 rounded-lg border border-line" /></div>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <button id="pwdSave" class="px-4 py-2 rounded-lg bg-brand-500 text-white text-[13px] font-semibold hover:bg-brand-600">修改口令</button>
+              <button id="exportData" class="px-4 py-2 rounded-lg border border-line text-[13px] font-semibold hover:bg-brand-50">导出我的数据</button>
+              <button id="logoutBtn" class="px-4 py-2 rounded-lg border border-line text-[13px] font-semibold hover:bg-brand-50">退出登录</button>
+            </div>
+            <div id="adminUserList" class="text-[12px] hint"></div>
+          </div>
+
+          <!-- 手工记账 -->
+          <div class="bg-white border border-line rounded-2xl shadow-card p-5 space-y-4">
+            <div><h2 class="font-bold text-[16px]">手工记一笔成交</h2>
+              <p class="text-[12px] hint mt-1">与「对话记账」共用同一套台账口径：买入摊薄成本、卖出只减股数、自动更新现金与仓位。</p></div>
+            <div class="grid md:grid-cols-3 gap-3">
+              <div><label class="text-[12px] text-ink-muted">股票代码</label><input id="trCode" placeholder="如 600519 / SZ000001" class="mt-1 w-full px-3 py-2.5 rounded-lg border border-line" /></div>
+              <div><label class="text-[12px] text-ink-muted">方向</label><select id="trSide" class="mt-1 w-full px-3 py-2.5 rounded-lg border border-line bg-white"><option value="buy">买入</option><option value="sell">卖出</option></select></div>
+              <div><label class="text-[12px] text-ink-muted">股数</label><input id="trShares" type="number" min="100" step="100" placeholder="100 的整数倍" class="mt-1 w-full px-3 py-2.5 rounded-lg border border-line" /></div>
+              <div><label class="text-[12px] text-ink-muted">成交价（留空按现价）</label><input id="trPrice" type="number" step="0.01" class="mt-1 w-full px-3 py-2.5 rounded-lg border border-line" /></div>
+              <div><label class="text-[12px] text-ink-muted">日期</label><input id="trDate" type="date" class="mt-1 w-full px-3 py-2.5 rounded-lg border border-line" /></div>
+              <div><label class="text-[12px] text-ink-muted">实际手续费（可选）</label><input id="trFee" type="number" step="0.01" class="mt-1 w-full px-3 py-2.5 rounded-lg border border-line" /></div>
+            </div>
+            <div class="flex items-center gap-2">
+              <button id="trSubmit" class="px-4 py-2 rounded-lg bg-brand-500 text-white text-[13px] font-semibold hover:bg-brand-600">记账并同步持仓</button>
+              <span id="trResult" class="text-[12px] hint"></span>
+            </div>
+          </div>
+
+          <!-- 导入真实交割单：复用后端 preview/commit，数据只在本地解析 -->
+          <div class="bg-white border border-line rounded-2xl shadow-card p-5 space-y-3">
+            <div><h2 class="font-bold text-[16px]">导入真实交割单</h2>
+              <p class="text-[12px] hint mt-1">把券商 App 导出的 CSV / TSV / Excel 流水传上来：先预览解析结果与持仓差异，确认无误再写入。文件只在你的浏览器和本机服务之间传递，不会上传到任何外部平台。</p></div>
+            <div class="flex flex-wrap items-center gap-2">
+              <input id="impFile" type="file" accept=".csv,.tsv,.txt,.xlsx,.xls" class="text-[12px] max-w-full" />
+              <label class="flex items-center gap-1 text-[12px] text-ink-muted"><input id="impApplyPos" type="checkbox" checked /> 同步持仓（取消则只导流水）</label>
+              <button id="impPreview" class="px-3 py-2 rounded-lg border border-line text-[13px] font-semibold hover:bg-brand-50">预览</button>
+              <button id="impCommit" class="px-3 py-2 rounded-lg bg-brand-500 text-white text-[13px] font-semibold hover:bg-brand-600" disabled>确认导入</button>
+              <span id="impResult" class="text-[12px] hint"></span>
+            </div>
+            <div id="impPreviewBox" class="hidden text-[12px]"></div>
+          </div>
+
+          <!-- 数据源健康 / 决策规则 / Agent 调度（只读自检） -->
+          <div class="lg:col-span-2 bg-white border border-line rounded-2xl shadow-card p-5 space-y-4">
+            <div class="flex items-center justify-between gap-2">
+              <div><h2 class="font-bold text-[16px]">运行自检</h2>
+                <p class="text-[12px] hint mt-1">数据源健康、决策规则口径与 Agent 自动调度状态，全部来自后端实时状态。</p></div>
+              <button id="healthRefresh" class="px-4 py-1.5 rounded-lg border border-line text-[13px] font-semibold hover:bg-brand-50">刷新</button>
+            </div>
+            <div id="healthBody" class="grid md:grid-cols-3 gap-3 text-[12px]">加载中…</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== AI · 分析顾问 ===================== -->
+      <section class="view" id="view-copilot">
+        <div id="agentBanner" class="hidden rounded-2xl border border-warn/40 bg-warn-soft px-4 py-3 text-[13px] text-[#8a6100]"></div>
+        <div class="grid grid-cols-[minmax(0,1fr)_320px] gap-4 h-[calc(100vh-136px)]">
+          <!-- 对话区 -->
+          <div class="bg-white border border-line rounded-2xl shadow-card flex flex-col min-h-0">
+            <div class="px-4 py-2.5 border-b border-line flex flex-wrap items-center gap-2">
+              <span class="text-[12px] text-ink-muted shrink-0">历史会话</span>
+              <select id="agentConvSelect" class="flex-1 min-w-[140px] px-2.5 py-1.5 rounded-lg border border-line bg-white text-[12px]">
+                <option value="">（新对话）</option>
+              </select>
+              <button id="agentNewConv" class="px-3 py-1.5 rounded-lg border border-line text-[12px] font-semibold hover:bg-ai-50">新对话</button>
+              <button id="agentDelConv" class="px-3 py-1.5 rounded-lg border border-line text-[12px] text-up hover:bg-up-soft">删除</button>
+            </div>
+            <div id="agentChatScroll" class="flex-1 overflow-y-auto p-5 space-y-4">
+              <div class="flex gap-3">
+                <div class="w-8 h-8 rounded-xl bg-ai-500 text-white grid place-items-center shrink-0">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 3a4 4 0 0 1 4 4v1a4 4 0 0 1 0 8v1a4 4 0 0 1-8 0v-1a4 4 0 0 1 0-8V7a4 4 0 0 1 4-4Z"/></svg>
+                </div>
+                <div class="flex-1 min-w-0">
+                  <div class="text-[13px] font-bold mb-1">分析顾问</div>
+                  <div class="rounded-2xl rounded-tl-md bg-white border border-line p-3.5 text-[13px] leading-relaxed text-ink-muted">
+                    我可以直接查你的自选股、持仓成本、K 线指标、资金流、筹码、大盘和回测引擎。
+                    <br/>提问后我会先规划、再逐个调数据、最后给带优先级的结论。每一步用了什么工具你都能在右侧看到。
+                    <br/><span class="text-ink-faint text-[12px]">结论基于你设定的规则和当前数据，不构成投资建议。</span>
+                  </div>
+                </div>
+              </div>
+              <div id="agentChatFlow" class="space-y-4"></div>
+            </div>
+            <div class="border-t border-line p-3">
+              <div id="agentSuggest" class="flex flex-wrap gap-2 mb-2"></div>
+              <div class="flex items-end gap-2">
+                <textarea id="agentInput" rows="1" placeholder="问我任何关于持仓、行情、策略的问题，或直接报成交：今天卖了巨人网络 500 股 27.35" class="flex-1 resize-none px-3.5 py-2.5 rounded-xl border border-line outline-none focus:border-ai-200 text-[13px]"></textarea>
+                <button id="agentSendBtn" class="h-[42px] px-4 rounded-xl bg-ai-500 hover:bg-ai-600 text-white text-[13px] font-semibold shrink-0">提问</button>
+                <button id="agentStopBtn" class="hidden h-[42px] px-3 rounded-xl border border-line text-ink-muted text-[13px] shrink-0">停止</button>
+              </div>
+              <p class="text-[11px] text-ink-faint mt-1.5">💡 报成交会自动记账并同步持仓/现金：「卖了 XX 500 股 @27.35」「加仓 XX 300 股」「XX 清掉了」。只记已成交的，计划不记。</p>
+            </div>
+          </div>
+          <!-- 运行轨迹 -->
+          <div class="bg-white border border-line rounded-2xl shadow-card flex flex-col min-h-0">
+            <div class="px-4 py-3 border-b border-line flex items-center justify-between">
+              <span class="text-[13px] font-bold">运行轨迹</span>
+              <span id="agentRunState" class="text-[11px] px-2 py-0.5 rounded-md bg-ink-faint/10 text-ink-muted">待运行</span>
+            </div>
+            <div class="px-3 pt-3">
+              <div class="grid grid-cols-3 gap-2">
+                <div class="rounded-xl border border-line p-2 text-center">
+                  <div id="agentMSteps" class="text-[16px] font-bold leading-none">—</div>
+                  <div class="text-[10px] text-ink-faint mt-1">推理步</div>
+                </div>
+                <div class="rounded-xl border border-line p-2 text-center">
+                  <div id="agentMTools" class="text-[16px] font-bold leading-none text-ai-600">—</div>
+                  <div class="text-[10px] text-ink-faint mt-1">工具调用</div>
+                </div>
+                <div class="rounded-xl border border-line p-2 text-center">
+                  <div id="agentMTime" class="text-[16px] font-bold leading-none">—</div>
+                  <div class="text-[10px] text-ink-faint mt-1">耗时(s)</div>
+                </div>
+              </div>
+            </div>
+            <div id="agentTrace" class="flex-1 overflow-y-auto p-3 space-y-2.5"></div>
+            <div class="p-3 border-t border-line">
+              <div class="text-[11px] font-semibold text-ink-muted mb-1.5">本轮数据源</div>
+              <div id="agentSources" class="flex flex-wrap gap-1.5"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== AI · 信号复核 ===================== -->
+      <section class="view" id="view-review">
+        <div class="flex items-center gap-3 flex-wrap">
+          <div class="text-[13px] font-bold">Agent 在「监控 → 钉钉」之间插入的一道复核</div>
+          <span id="reviewSum" class="text-[11px] text-ink-faint">尚未复核</span>
+          <button id="reviewRunBtn" class="ml-auto px-3 py-1.5 rounded-lg bg-ai-500 text-white text-[13px] font-semibold hover:bg-ai-600">复核当前监控信号</button>
+        </div>
+        <div class="grid grid-cols-[360px_minmax(0,1fr)] gap-4">
+          <div class="bg-white border border-line rounded-2xl shadow-card overflow-hidden">
+            <div class="px-4 py-2.5 border-b border-line text-[12px] font-bold">信号队列</div>
+            <div id="reviewList" class="divide-y divide-line max-h-[560px] overflow-y-auto">
+              <div class="px-4 py-8 text-center text-[12px] text-ink-faint">点击右上角「复核当前监控信号」开始</div>
+            </div>
+          </div>
+          <div class="bg-white border border-line rounded-2xl shadow-card p-5" id="reviewDetail">
+            <div class="text-center py-16 text-[12.5px] text-ink-faint leading-relaxed">
+              复核会调用分时、资金流、板块、K线四类数据<br/>判断信号是真突破还是尾盘竞价造成的假放量
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== AI · 盘后复盘 ===================== -->
+      <section class="view" id="view-daily">
+        <div class="flex items-center gap-3 flex-wrap">
+          <div class="text-[13px] font-bold">盘后复盘</div>
+          <span id="dailyDate" class="text-[11px] text-ink-faint"></span>
+          <button id="dailyRunBtn" class="ml-auto px-3 py-1.5 rounded-lg bg-ai-500 text-white text-[13px] font-semibold hover:bg-ai-600">生成今日复盘</button>
+        </div>
+        <div id="dailyBody">
+          <div class="bg-white border border-line rounded-2xl shadow-card p-10 text-center text-[12.5px] text-ink-faint leading-relaxed">
+            收盘后点「生成今日复盘」，Agent 会汇总组合表现、异动归因和明日预案<br/>
+            非交易时段生成的是最近一个交易日的数据
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== AI · 策略诊断 ===================== -->
+      <section class="view" id="view-doctor">
+        <div class="flex items-center gap-3 flex-wrap">
+          <div class="text-[13px] font-bold">策略诊断</div>
+          <select id="doctorCode" class="px-3 py-1.5 rounded-lg border border-line text-[12.5px]"></select>
+          <select id="doctorStrategy" class="px-3 py-1.5 rounded-lg border border-line text-[12.5px]"></select>
+          <button id="doctorRunBtn" class="ml-auto px-3 py-1.5 rounded-lg bg-ai-500 text-white text-[13px] font-semibold hover:bg-ai-600">开始诊断</button>
+        </div>
+        <div id="doctorBody">
+          <div class="bg-white border border-line rounded-2xl shadow-card p-10 text-center text-[12.5px] text-ink-faint leading-relaxed">
+            选一只自选股和一套策略，Agent 会先跑回测，再把亏损拆成「信号滞后 / 震荡摩擦 / 手续费滑点」并给改进建议
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== AI · 持仓风险 ===================== -->
+      <section class="view" id="view-risk">
+        <div class="flex items-center gap-3 flex-wrap">
+          <div class="text-[13px] font-bold">持仓风险体检</div>
+          <span id="riskBadge" class="text-[11px] px-2 py-0.5 rounded-md bg-ink-faint/10 text-ink-muted">未检测</span>
+          <button id="riskRunBtn" class="ml-auto px-3 py-1.5 rounded-lg bg-ai-500 text-white text-[13px] font-semibold hover:bg-ai-600">开始体检</button>
+        </div>
+        <div id="riskBody">
+          <div class="bg-white border border-line rounded-2xl shadow-card p-10 text-center text-[12.5px] text-ink-faint leading-relaxed">
+            体检会先做门槛类纯计算（集中度、行业暴露、止损距离），再让 Agent 解释风险并给优先级
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== AI · 卖出决策 ===================== -->
+      <section class="view" id="view-sell">
+        <div class="flex items-center gap-3 flex-wrap">
+          <div class="text-[13px] font-bold">卖出决策</div>
+          <span id="sellStyleBadge" class="text-[11px] px-2 py-0.5 rounded-md bg-ink-faint/10 text-ink-muted">投资风格 --</span>
+          <button id="sellRunBtn" class="ml-auto px-3 py-1.5 rounded-lg bg-ai-500 text-white text-[13px] font-semibold hover:bg-ai-600">分析卖出目标价</button>
+        </div>
+        <div id="sellBody">
+          <div class="bg-white border border-line rounded-2xl shadow-card p-10 text-center text-[12.5px] text-ink-faint leading-relaxed">
+            先算出每只持仓的 <b class="text-ink">保守 / 基线 / 激进</b> 三套情景目标价，以及当前的退出模式
+            （接力跟随 / 高位转弱 / 退潮防御 / 逻辑止损 / 按阶梯），<br/>
+            再让 Agent 判断"现在该按哪套执行、什么信号切换、什么情况下才真正清仓"
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== AI · Agent 编排 ===================== -->
+      <section class="view" id="view-orchestration">
+        <div id="orchBody">
+          <div class="bg-white border border-line rounded-2xl shadow-card p-10 text-center text-[12.5px] text-ink-faint">加载中…</div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+</div>
+
+<!-- ============ 个股详情抽屉 ============ -->
+<div id="drawerMask" class="fixed inset-0 bg-black/40 z-40 hidden"></div>
+<aside id="drawer" class="drawer fixed top-0 right-0 h-screen w-full max-w-[460px] bg-white z-50 shadow-2xl translate-x-full flex flex-col">
+  <div class="px-5 py-4 border-b border-line flex items-start justify-between">
+    <div>
+      <div class="text-[20px] font-extrabold" id="dName">--</div>
+      <div class="text-[12px] text-ink-faint" id="dCode">--</div>
+    </div>
+    <button id="drawerClose" class="w-9 h-9 rounded-lg border border-line text-ink-muted hover:bg-brand-50">×</button>
+  </div>
+  <div class="flex-1 overflow-auto p-5 space-y-5">
+    <div class="flex items-end gap-3">
+      <div id="dPrice" class="text-[34px] font-extrabold kbox">--</div>
+      <div id="dPct" class="text-[15px] font-semibold kbox mb-1">--</div>
+    </div>
+    <div class="bg-brand-50 rounded-xl p-3" id="dKline"></div>
+    <div class="grid grid-cols-3 gap-3 text-[13px]" id="dMetrics"></div>
+    <div>
+      <div class="font-bold text-[14px] mb-2">持仓信息</div>
+      <div class="rounded-xl border border-line p-3 space-y-2">
+        <div class="grid grid-cols-3 gap-2">
+          <div><label class="text-[12px] text-ink-muted">持股数</label><input id="dShares" type="number" step="1" class="mt-1 w-full px-2 py-1.5 rounded-lg border border-line" /></div>
+          <div><label class="text-[12px] text-ink-muted">成本</label><input id="dCost" type="text" inputmode="decimal" class="mt-1 w-full px-2 py-1.5 rounded-lg border border-line" /></div>
+          <div><label class="text-[12px] text-ink-muted">所属池</label><select id="dPool" class="mt-1 w-full px-2 py-1.5 rounded-lg border border-line bg-white">
+            <option value="">未分类</option>
+            <option value="dividend">股息</option>
+            <option value="catalyst">催化波段成长</option>
+            <option value="long_track">长赛道产业成长</option>
+            <option value="value">低估价值</option>
+          </select></div>
+        </div>
+        <button id="dSavePos" class="w-full px-4 py-2 rounded-lg bg-brand-500 text-white text-[13px] font-semibold hover:bg-brand-600">保存持仓信息</button>
+      </div>
+    </div>
+    <div>
+      <div class="font-bold text-[14px] mb-2">策略信号</div>
+      <div id="dSignals" class="space-y-2"></div>
+    </div>
+    <div>
+      <div class="font-bold text-[14px] mb-2">买卖点参考</div>
+      <div id="dTrade" class="rounded-xl border border-line p-3 text-[13px]"></div>
+    </div>
+    <div>
+      <div class="font-bold text-[14px] mb-2">行业估值（相对本行业）</div>
+      <div id="dIndustryVal" class="rounded-xl border border-line p-3 text-[13px] text-ink-muted">加载中…</div>
+    </div>
+  </div>
+</aside>
+
+<!-- ============ 交互说明弹窗 ============ -->
+<!-- ============ 因子编辑弹窗 ============ -->
+<div class="modal hidden" id="factor-modal" aria-hidden="true">
+  <div class="modal-backdrop" id="factorBackdrop"></div>
+  <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="factor-modal-title">
+    <div class="modal-header">
+      <div>
+        <h2 id="factor-modal-title">新建因子</h2>
+        <p id="factor-modal-desc" class="text-[12px] text-ink-faint mt-0.5">保存后可一键载入回测，或让分析顾问直接调用</p>
+      </div>
+      <button class="icon-btn" id="factorClose" aria-label="关闭">×</button>
+    </div>
+    <div class="p-5 space-y-3">
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-[12px] text-ink-muted">因子名称 *</label>
+          <input id="fName" class="mt-1 w-full px-3 py-2.5 rounded-lg border border-line" placeholder="如 金叉回踩" />
+        </div>
+        <div>
+          <label class="text-[12px] text-ink-muted">对比基准</label>
+          <select id="fBench" class="mt-1 w-full px-3 py-2.5 rounded-lg border border-line bg-white">
+            <option value="hs300">沪深300</option>
+            <option value="zz500">中证500</option>
+            <option value="sh">上证指数</option>
+            <option value="sz">深证成指</option>
+            <option value="none">不作对比</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label class="text-[12px] text-ink-muted">说明</label>
+        <input id="fDesc" class="mt-1 w-full px-3 py-2.5 rounded-lg border border-line" placeholder="一句话描述这个因子的逻辑与适用场景" />
+      </div>
+      <div class="space-y-2">
+        <div>
+          <label class="text-[12px] text-ink-muted">入场条件 *</label>
+          <input id="fEntry" class="mt-1 w-full px-3 py-2.5 rounded-lg border border-line kbox text-[12px]" placeholder="如 CROSS(DIF, DEA)" />
+        </div>
+        <div>
+          <label class="text-[12px] text-ink-muted">出场条件</label>
+          <input id="fExit" class="mt-1 w-full px-3 py-2.5 rounded-lg border border-line kbox text-[12px]" placeholder="如 CROSS(DEA, DIF)" />
+        </div>
+      </div>
+      <div class="grid grid-cols-4 gap-2">
+        <div><label class="text-[11px] text-ink-faint">初始资金(元)</label><input id="fCapital" type="number" value="100000" class="mt-1 w-full px-2 py-1.5 rounded-lg border border-line text-[12px]" /></div>
+        <div><label class="text-[11px] text-ink-faint">费率%</label><input id="fFee" type="number" step="0.01" value="0.075" class="mt-1 w-full px-2 py-1.5 rounded-lg border border-line text-[12px]" /></div>
+        <div><label class="text-[11px] text-ink-faint">滑点%</label><input id="fSlip" type="number" step="0.01" value="0.1" class="mt-1 w-full px-2 py-1.5 rounded-lg border border-line text-[12px]" /></div>
+        <div><label class="text-[11px] text-ink-faint">仓位%</label><input id="fPos" type="number" step="5" value="100" class="mt-1 w-full px-2 py-1.5 rounded-lg border border-line text-[12px]" /></div>
+      </div>
+      <p class="text-[12px] hint">可用字段：C/OPEN/HIGH/LOW/CLOSE/VOL/AMOUNT，以及 MA(字段,n)、REF(字段,n)、CROSS(快,慢)、abs/max/min/round。信号当日收盘判定、次日开盘成交。</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" id="factorCancel">取消</button>
+      <button class="btn primary" id="factorSave">保存</button>
+    </div>
+  </div>
+</div>
+
+<div id="helpMask" class="fixed inset-0 bg-black/40 z-[60] hidden grid place-items-center p-5">
+  <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl">
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="font-extrabold text-[17px]">前端交互说明</h3>
+      <button id="helpClose" class="w-8 h-8 rounded-lg border border-line text-ink-muted">×</button>
+    </div>
+    <ul class="text-[13px] space-y-2 text-ink-muted list-disc pl-5">
+      <li>左侧导航在 <b>总览 / 自选股 / 计算器 / 策略 / 回测 / 设置</b> 间切换（无刷新）。</li>
+      <li>顶栏 <b>刷新行情</b> 拉取实时数据；开启 <b>自动刷新</b> 后每 30 秒自动刷新自选行情与指数（价格变动会闪烁涨跌色）。开关状态会被记住，切换页面或刷新浏览器后仍保持。</li>
+      <li>涨=红、跌=绿（A股习惯）。成交额、持仓盈亏来自实时行情与本地持仓。</li>
+      <li>总览或自选页 <b>点击任意股票</b> 从右侧滑出 <b>个股详情抽屉</b>（K线+指标+持仓+信号+买卖点），按 Esc / 点遮罩关闭。</li>
+      <li>自选页可 <b>加入/移除自选</b>；计算器随输入 <b>实时计算</b> 保本买回价。</li>
+      <li>策略页按 <b>短线/中长线/长线</b> 切换配置；设置页可 <b>切换行情数据源（星耀数智 / 雪球）</b>。</li>
+      <li>回测页选标的与区间后点 <b>运行回测</b>：信号当日收盘判定、<b>次日开盘成交</b>，已计入手续费与滑点；右侧给出总收益/年化/回撤/夏普/胜率与<b>策略净值 vs 基准</b>曲线、逐笔成交记录，底部可一键 <b>诊断</b> 给出改进方向。</li>
+      <li><b>策略因子库</b>（侧栏新入口）：集中管理回测验证过的表达式因子，支持新建/编辑/删除；回测页可一键<b>载入</b>或<b>存为因子</b>，分析顾问也能直接调用这些因子去回测某只股票或判定当日信号。</li>
+      <li><b>绩效复盘</b> 页：用真实持仓与流水生成净值曲线，对比沪深300，并给出最大回撤、夏普、胜率/盈亏比。口径是「以当前持仓为锚点倒推历史」，曲线末端等于账户总资产。</li>
+      <li><b>系统设置</b> 页底部：<b>服务端自动监控</b>（关掉浏览器也会按交易时段推送）、<b>告警推送历史</b>（含失败原因）、<b>数据备份</b>与<b>操作审计</b>（管理员可见）。</li>
+      <li>自选股支持<b>分组</b>：添加时填分组，卡片上方按「全部 / 未分组 / 各分组」筛选。</li>
+      <li>AI 分析顾问支持<b>历史会话</b>：对话自动落库，刷新或换设备后可接着聊。</li>
+    </ul>
+    <div class="mt-4 text-[12px] hint">本前端为可交付稿，已对接现有后端接口（/api/stock/spot、/api/stock/favorites、/api/stock/monitor、/api/stock/kline、/api/stock/prefer_source 等）。</div>
+  </div>
+</div>
+
+<!-- ============ Toast ============ -->
+<div id="toast" class="fixed top-4 right-4 z-[70] space-y-2 w-[320px]"></div>
+
+<script src="/static/api.js"></script>
+<script src="/static/app.js"></script>
+<script src="/static/agent.js"></script>
+<script src="/static/ops.js"></script>
+<script src="/static/admin.js"></script>
+<script src="/static/pools.js"></script>
+<script src="/static/simple.js"></script>
+</body>
+</html>
