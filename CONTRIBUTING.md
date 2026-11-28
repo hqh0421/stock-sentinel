@@ -74,11 +74,13 @@ include the test that proves it.
 
 ## External PR flow (how we merge)
 
-- This public repository holds a **sanitized single-commit snapshot**. The private
-  development history lives in a separate repository. Accepted PRs are merged here
-  first, then ported into the internal history by a maintainer.
-- Because the snapshot force-pushes on each release, please keep PRs small and
-  based on the latest `master` to avoid repeated conflict resolution.
+- This public repository is a **sanitized mirror** with normal, append-only history.
+  The private development history lives in a separate repository. Accepted PRs are
+  merged here first (you keep the merge credit), then a maintainer cherry-picks the
+  merge commit into the internal repository.
+- Do not edit generated/sanitized-only files (`README.md`, `docs/`, `config/*.json`,
+  `screenshots/`) — they are produced from internal sources and will be overwritten
+  on the next sync. Keep PRs to source code, tests, and shared config.
 - Do not include real API keys, cookies, webhook URLs, or personal holdings in any
   commit, issue, or PR. `scripts/harden_secrets.py` and the pre-commit hook will
   reject obvious cases; the rest is on you.
